@@ -24,4 +24,22 @@ export const ensureTables = async () => {
       data jsonb NOT NULL
     );
   `;
+  await db`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS automation_rules (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS canned_responses (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
 };

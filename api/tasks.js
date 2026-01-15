@@ -1,5 +1,5 @@
 import { ensureTables, getSql } from './_db';
-import { ticketSeed } from './seedData';
+import { taskSeed } from './seedData';
 
 const parseBody = (req) => {
   if (!req.body) return null;
@@ -19,16 +19,20 @@ const parseQuery = (req) => {
   const limit = Math.min(Math.max(parseInt(getValue('limit') || '20', 10), 1), 200);
   const offset = Math.max(parseInt(getValue('offset') || '0', 10), 0);
   const q = (getValue('q') || '').trim().toLowerCase();
+  const ticketId = getValue('ticketId') || '';
   const status = getValue('status') || '';
   const assignee = getValue('assignee') || '';
-  const type = getValue('type') || '';
-  return { limit, offset, q, status, assignee, type };
+  return { limit, offset, q, ticketId, status, assignee };
 };
 
-const buildFilters = ({ q, status, assignee, type }) => {
+const buildFilters = ({ q, ticketId, status, assignee }) => {
   const clauses = [];
   const params = [];
 
+  if (ticketId) {
+    params.push(ticketId);
+    clauses.push(`data->>'ticketId' = $${params.length}`);
+  }
   if (status) {
     params.push(status);
     clauses.push(`data->>'status' = $${params.length}`);
@@ -37,27 +41,21 @@ const buildFilters = ({ q, status, assignee, type }) => {
     params.push(assignee);
     clauses.push(`data->>'assignee' = $${params.length}`);
   }
-  if (type) {
-    params.push(type);
-    clauses.push(`data->>'type' = $${params.length}`);
-  }
   if (q) {
     params.push(`%${q}%`);
     const idx = params.length;
-    clauses.push(
-      `(lower(data->>'title') LIKE $${idx} OR lower(data->>'id') LIKE $${idx} OR lower(data->>'requester') LIKE $${idx})`,
-    );
+    clauses.push(`(lower(data->>'title') LIKE $${idx} OR lower(data->>'id') LIKE $${idx})`);
   }
 
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   return { where, params };
 };
 
-const seedTickets = async (db) => {
-  for (const ticket of ticketSeed) {
+const seedTasks = async (db) => {
+  for (const task of taskSeed) {
     await db`
-      INSERT INTO tickets (id, data)
-      VALUES (${ticket.id}, ${JSON.stringify(ticket)}::jsonb)
+      INSERT INTO tasks (id, data)
+      VALUES (${task.id}, ${JSON.stringify(task)}::jsonb)
       ON CONFLICT (id) DO NOTHING;
     `;
   }
@@ -72,33 +70,43 @@ export default async function handler(req, res) {
       const { limit, offset, ...filters } = parseQuery(req);
       const { where, params } = buildFilters(filters);
       const filterParams = [...params];
-      const totalRows = await db(`SELECT COUNT(*)::int AS total FROM tickets ${where}`, filterParams);
+      const totalRows = await db(`SELECT COUNT(*)::int AS total FROM tasks ${where}`, filterParams);
       const rows = await db(
-        `SELECT data FROM tickets ${where} ORDER BY (data->>'createdAt')::bigint DESC NULLS LAST, id DESC LIMIT $${
-          params.length + 1
-        } OFFSET $${params.length + 2}`,
+        `SELECT data FROM tasks ${where} ORDER BY id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, limit, offset],
       );
 
       if (!rows.length) {
-        await seedTickets(db);
+        await seedTasks(db);
         const seededRows = await db(
-          `SELECT data FROM tickets ${where} ORDER BY (data->>'createdAt')::bigint DESC NULLS LAST, id DESC LIMIT $${
-            params.length + 1
-          } OFFSET $${params.length + 2}`,
+          `SELECT data FROM tasks ${where} ORDER BY id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
           [...params, limit, offset],
         );
-        const seededTotal = await db(`SELECT COUNT(*)::int AS total FROM tickets ${where}`, filterParams);
+        const seededTotal = await db(`SELECT COUNT(*)::int AS total FROM tasks ${where}`, filterParams);
         return res.status(200).json({
-          tickets: seededRows.map((row) => row.data),
+          tasks: seededRows.map((row) => row.data),
           meta: { total: seededTotal[0]?.total || 0, limit, offset },
         });
       }
 
       return res.status(200).json({
-        tickets: rows.map((row) => row.data),
+        tasks: rows.map((row) => row.data),
         meta: { total: totalRows[0]?.total || 0, limit, offset },
       });
+    }
+
+    if (req.method === 'POST') {
+      const body = parseBody(req);
+      const task = body?.task;
+      if (!task?.id) {
+        return res.status(400).json({ error: 'Missing task payload' });
+      }
+      await db`
+        INSERT INTO tasks (id, data)
+        VALUES (${task.id}, ${JSON.stringify(task)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;
+      `;
+      return res.status(200).json({ task });
     }
 
     if (req.method === 'PATCH') {
@@ -108,17 +116,17 @@ export default async function handler(req, res) {
       if (!id || !updates) {
         return res.status(400).json({ error: 'Missing id or updates' });
       }
-      const rows = await db`SELECT data FROM tickets WHERE id = ${id}`;
+      const rows = await db`SELECT data FROM tasks WHERE id = ${id}`;
       if (!rows.length) {
-        return res.status(404).json({ error: 'Ticket not found' });
+        return res.status(404).json({ error: 'Task not found' });
       }
       const next = { ...rows[0].data, ...updates };
       await db`
-        UPDATE tickets
+        UPDATE tasks
         SET data = ${JSON.stringify(next)}::jsonb
         WHERE id = ${id};
       `;
-      return res.status(200).json({ ticket: next });
+      return res.status(200).json({ task: next });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

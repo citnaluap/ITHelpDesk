@@ -1611,6 +1611,21 @@ body.dark-mode .report-card-icon {
   flex-wrap: wrap;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-meta {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .ticket-detail-page {
   display: grid;
   gap: 12px;

@@ -13,6 +13,41 @@ const parseBody = (req) => {
   return req.body;
 };
 
+const parseQuery = (req) => {
+  const query = req.query || {};
+  const getValue = (key) => (Array.isArray(query[key]) ? query[key][0] : query[key]);
+  const limit = Math.min(Math.max(parseInt(getValue('limit') || '20', 10), 1), 200);
+  const offset = Math.max(parseInt(getValue('offset') || '0', 10), 0);
+  const q = (getValue('q') || '').trim().toLowerCase();
+  const status = getValue('status') || '';
+  const type = getValue('type') || '';
+  return { limit, offset, q, status, type };
+};
+
+const buildFilters = ({ q, status, type }) => {
+  const clauses = [];
+  const params = [];
+
+  if (status) {
+    params.push(status);
+    clauses.push(`data->>'status' = $${params.length}`);
+  }
+  if (type) {
+    params.push(type);
+    clauses.push(`data->>'type' = $${params.length}`);
+  }
+  if (q) {
+    params.push(`%${q}%`);
+    const idx = params.length;
+    clauses.push(
+      `(lower(data->>'title') LIKE $${idx} OR lower(data->>'id') LIKE $${idx} OR lower(data->>'requester') LIKE $${idx})`,
+    );
+  }
+
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  return { where, params };
+};
+
 const seedApprovals = async (db) => {
   for (const approval of approvalSeed) {
     await db`
@@ -29,13 +64,32 @@ export default async function handler(req, res) {
     const db = getSql();
 
     if (req.method === 'GET') {
-      const rows = await db`SELECT data FROM approvals ORDER BY id`;
+      const { limit, offset, ...filters } = parseQuery(req);
+      const { where, params } = buildFilters(filters);
+      const filterParams = [...params];
+      const totalRows = await db(`SELECT COUNT(*)::int AS total FROM approvals ${where}`, filterParams);
+      const rows = await db(
+        `SELECT data FROM approvals ${where} ORDER BY id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset],
+      );
+
       if (!rows.length) {
         await seedApprovals(db);
-        const seeded = await db`SELECT data FROM approvals ORDER BY id`;
-        return res.status(200).json({ approvals: seeded.map((row) => row.data) });
+        const seededRows = await db(
+          `SELECT data FROM approvals ${where} ORDER BY id LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+          [...params, limit, offset],
+        );
+        const seededTotal = await db(`SELECT COUNT(*)::int AS total FROM approvals ${where}`, filterParams);
+        return res.status(200).json({
+          approvals: seededRows.map((row) => row.data),
+          meta: { total: seededTotal[0]?.total || 0, limit, offset },
+        });
       }
-      return res.status(200).json({ approvals: rows.map((row) => row.data) });
+
+      return res.status(200).json({
+        approvals: rows.map((row) => row.data),
+        meta: { total: totalRows[0]?.total || 0, limit, offset },
+      });
     }
 
     if (req.method === 'PATCH') {

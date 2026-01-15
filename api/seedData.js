@@ -171,3 +171,46 @@ export const approvalSeed = [
     due: 'Fri',
   },
 ];
+
+export const taskSeed = [
+  { id: 'TSK-451', ticketId: 'INC-4921', title: 'Collect VPN logs', assignee: 'Paul Antic', status: 'In Progress', due: 'Today' },
+  { id: 'TSK-452', ticketId: 'INC-4921', title: 'Schedule ISP check', assignee: 'Geoffrey Heller', status: 'Not started', due: 'Tomorrow' },
+  { id: 'TSK-460', ticketId: 'REQ-4923', title: 'Validate replacement eligibility', assignee: 'Paul Antic', status: 'Completed', due: 'Today' },
+];
+
+export const automationSeed = [
+  {
+    id: 'AUTO-12',
+    name: 'High priority routing',
+    when: 'Ticket created',
+    condition: 'Priority is High',
+    action: 'Assign to on-call lead',
+    enabled: true,
+  },
+  {
+    id: 'AUTO-18',
+    name: 'Waiting on user reminder',
+    when: 'Status idle 48h',
+    condition: 'Status is Waiting on User',
+    action: 'Send reminder email',
+    enabled: true,
+  },
+];
+
+export const cannedSeed = [
+  {
+    id: 'CAN-01',
+    title: 'Request received',
+    body: 'Thanks for reaching out. We have received your request and will update you shortly.',
+  },
+  {
+    id: 'CAN-02',
+    title: 'Need more info',
+    body: 'Could you please provide screenshots or the exact error message so we can continue?',
+  },
+  {
+    id: 'CAN-03',
+    title: 'Resolution summary',
+    body: 'Issue resolved. We updated the configuration and verified service health. Let us know if it recurs.',
+  },
+];

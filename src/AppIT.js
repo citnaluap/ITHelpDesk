@@ -27,11 +27,26 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import employeeDirectory from './data/employeeDirectory.json';
-import { fetchApprovals, fetchTickets, updateApproval, updateTicket } from './api';
+import {
+  createAutomationRule,
+  createCannedResponse,
+  fetchApprovals,
+  fetchAutomationRules,
+  fetchCannedResponses,
+  fetchTickets,
+  updateApproval,
+  updateAutomationRule,
+  updateTicket,
+} from './api';
+import InlineTag from './components/InlineTag';
+import TicketDetail from './components/TicketDetail';
+import { toKebabCase } from './utils/format';
 
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
 const TICKET_FILTERS = ['All', 'New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
 const STATUS_OPTIONS = ['New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
+const TICKET_PAGE_SIZE = 12;
+const APPROVAL_PAGE_SIZE = 8;
 const ASSIGNEES = [
   'Unassigned',
   'Paul Antic',
@@ -52,53 +67,8 @@ const TECHNICIANS = [
   { name: 'Erik Lofgren', role: 'Chief of Technology' },
 ];
 const AUTH_STORAGE_KEY = 'it-support-auth-user';
-const SLA_POLICIES = {
-  High: {
-    responseMs: 60 * 60 * 1000,
-    resolveMs: 4 * 60 * 60 * 1000,
-    responseWarnMs: 15 * 60 * 1000,
-    resolveWarnMs: 60 * 60 * 1000,
-    escalation: [
-      '15 minutes before response breach: alert on-call lead.',
-      'At response breach: page Incident Manager.',
-      '1 hour before resolution breach: notify IT manager.',
-    ],
-  },
-  Medium: {
-    responseMs: 4 * 60 * 60 * 1000,
-    resolveMs: 2 * 24 * 60 * 60 * 1000,
-    responseWarnMs: 60 * 60 * 1000,
-    resolveWarnMs: 6 * 60 * 60 * 1000,
-    escalation: [
-      '1 hour before response breach: alert queue lead.',
-      'At response breach: notify IT manager.',
-      '6 hours before resolution breach: notify service owner.',
-    ],
-  },
-  Low: {
-    responseMs: 8 * 60 * 60 * 1000,
-    resolveMs: 5 * 24 * 60 * 60 * 1000,
-    responseWarnMs: 2 * 60 * 60 * 1000,
-    resolveWarnMs: 24 * 60 * 60 * 1000,
-    escalation: [
-      '2 hours before response breach: notify queue lead.',
-      'At response breach: escalate to service owner.',
-      '24 hours before resolution breach: notify IT manager.',
-    ],
-  },
-};
 const INTAKE_EMAIL = 'paula@udservices.org';
 const INTAKE_SOURCE = 'Office365 email flow';
-const SLA_STATE_LABELS = {
-  'on-track': 'On track',
-  'at-risk': 'At risk',
-  breached: 'Breached',
-  met: 'Met',
-};
-const BASE_TIME = Date.now();
-const hoursAgo = (hours) => BASE_TIME - hours * 60 * 60 * 1000;
-const daysAgo = (days) => BASE_TIME - days * 24 * 60 * 60 * 1000;
-
 const navItems = [
   { id: 'overview', label: 'Overview', icon: Sparkles, targetId: 'overview' },
   { id: 'tickets', label: 'Tickets', icon: Mail, targetId: 'tickets' },
@@ -203,41 +173,6 @@ const workQueue = [
   },
 ];
 
-const approvalSeed = [
-  {
-    id: 'APR-88',
-    type: 'Access',
-    title: 'Salesforce license upgrade',
-    requester: 'Maya Khan',
-    status: 'Pending',
-    due: 'Today',
-  },
-  {
-    id: 'APR-87',
-    type: 'Hardware',
-    title: 'Second monitor for design team',
-    requester: 'Nina Patel',
-    status: 'Pending',
-    due: 'Tomorrow',
-  },
-  {
-    id: 'APR-86',
-    type: 'Software',
-    title: 'Figma enterprise seat',
-    requester: 'Jon Park',
-    status: 'Approved',
-    due: 'Completed',
-  },
-  {
-    id: 'APR-85',
-    type: 'Access',
-    title: 'Finance shared drive access',
-    requester: 'Claire V.',
-    status: 'Pending',
-    due: 'Thu',
-  },
-];
-
 
 const changeCalendar = [
   {
@@ -260,138 +195,6 @@ const changeCalendar = [
     title: 'Exchange spam filter tuning',
     window: 'Wed 7:00p - 8:00p',
     status: 'Planned',
-  },
-];
-
-const ticketSeed = [
-  {
-    id: 'INC-4921',
-    type: 'Incident',
-    title: 'VPN drops every 20 minutes',
-    requester: 'Prem Acharya',
-    requesterEmail: 'prema@udservices.org',
-    department: 'HCBS',
-    status: 'New',
-    priority: 'High',
-    assignee: 'Unassigned',
-    created: 'Today 10:14a',
-    createdAt: hoursAgo(2),
-    category: 'Network',
-    impact: 'Multiple teams',
-    urgency: 'High',
-    contactPreference: 'Phone',
-    device: 'LAPTOP418',
-    description:
-      'VPN disconnects roughly every 20 minutes when offsite. User confirmed Wi-Fi is stable and Duo prompts succeed.',
-    entries: [
-      { id: 'entry-1', type: 'note', author: 'Auto-triage', time: '10:16a', text: 'Captured device and VPN logs for last 24 hours.' },
-      { id: 'entry-2', type: 'message', author: 'Paul Antic', time: '10:24a', text: 'Hi Prem, can you confirm if this happens on Ethernet as well?' },
-    ],
-  },
-  {
-    id: 'REQ-4923',
-    type: 'Request',
-    title: 'Laptop replacement request',
-    requester: 'Aracelis Alamo',
-    requesterEmail: 'Aracelisa@udservices.org',
-    department: 'HCBS',
-    status: 'In Review',
-    priority: 'Medium',
-    assignee: 'Paul Antic',
-    created: 'Today 9:22a',
-    createdAt: hoursAgo(5),
-    respondedAt: hoursAgo(4),
-    category: 'Hardware',
-    impact: 'Just me',
-    urgency: 'Normal',
-    contactPreference: 'Email',
-    device: 'LAPTOP286',
-    description: 'Laptop is running slow and battery life is failing. Requesting a replacement with the standard UDS bundle.',
-    entries: [{ id: 'entry-3', type: 'note', author: 'Paul Antic', time: '9:40a', text: 'Confirmed device diagnostics and replacement eligibility.' }],
-  },
-  {
-    id: 'REQ-4925',
-    type: 'Request',
-    title: 'Finance shared drive access',
-    requester: 'Islam Algodi',
-    requesterEmail: 'islama@udservices.org',
-    department: 'HCBS',
-    status: 'Waiting on User',
-    priority: 'Low',
-    assignee: 'Melvin Paneto',
-    created: 'Yesterday',
-    createdAt: hoursAgo(28),
-    respondedAt: hoursAgo(24),
-    category: 'Account / Access',
-    impact: 'Just me',
-    urgency: 'Normal',
-    contactPreference: 'Teams chat',
-    device: 'LAPTOP533',
-    description: 'Needs access to Finance shared drive for quarterly reporting and client audits.',
-    entries: [{ id: 'entry-4', type: 'message', author: 'Melvin Paneto', time: 'Yesterday 3:18p', text: 'Hi Islam, please confirm manager approval and access level.' }],
-  },
-  {
-    id: 'INC-4912',
-    type: 'Incident',
-    title: 'Printer jam on 3rd floor',
-    requester: 'Clara Ames',
-    requesterEmail: 'claraa@udservices.org',
-    department: 'HCBS AmeriHealth',
-    status: 'In Progress',
-    priority: 'Low',
-    assignee: 'Miles Grater',
-    created: 'Yesterday',
-    createdAt: hoursAgo(26),
-    respondedAt: hoursAgo(25),
-    category: 'Facilities',
-    impact: 'My team',
-    urgency: 'Normal',
-    contactPreference: 'Phone',
-    device: 'PRINTER012',
-    description: 'Paper jam in tray 2. Needs maintenance and toner check.',
-    entries: [{ id: 'entry-5', type: 'note', author: 'Miles Grater', time: 'Yesterday 1:05p', text: 'On-site visit scheduled for 2:00p.' }],
-  },
-  {
-    id: 'REQ-4910',
-    type: 'Request',
-    title: 'Zoom room AV calibration',
-    requester: 'Renee Alston',
-    requesterEmail: 'reneea@udsfoundation.org',
-    department: 'Resource Center',
-    status: 'New',
-    priority: 'Medium',
-    assignee: 'Unassigned',
-    created: 'Mon',
-    createdAt: daysAgo(2),
-    category: 'Facilities',
-    impact: 'My team',
-    urgency: 'Normal',
-    contactPreference: 'Email',
-    device: 'Conference room AV - Erin Court',
-    description: 'Room mics are clipping. Requesting calibration for upcoming webinar.',
-    entries: [],
-  },
-  {
-    id: 'INC-4908',
-    type: 'Incident',
-    title: 'Email delivery delays',
-    requester: 'Imelda Almaguer',
-    requesterEmail: 'imeldaa@udservices.org',
-    department: 'HCBS',
-    status: 'Resolved',
-    priority: 'High',
-    assignee: 'Geoffrey Heller',
-    created: 'Mon',
-    createdAt: daysAgo(3),
-    respondedAt: daysAgo(3) + 60 * 60 * 1000,
-    resolvedAt: daysAgo(2) + 4 * 60 * 60 * 1000,
-    category: 'Email',
-    impact: 'Org-wide',
-    urgency: 'Urgent (service down)',
-    contactPreference: 'Email',
-    device: 'Microsoft 365',
-    description: 'Inbound messages delayed due to upstream filter issue. Resolved after vendor reset.',
-    entries: [{ id: 'entry-6', type: 'note', author: 'Geoffrey Heller', time: 'Mon 4:12p', text: 'Vendor applied hotfix and queues drained.' }],
   },
 ];
 
@@ -675,40 +478,7 @@ const csatSurveys = [
   { id: 'CSAT-12', title: 'New hire onboarding survey', status: 'Draft', responses: 0, score: '-' },
 ];
 
-const automationSeed = [
-  {
-    id: 'AUTO-12',
-    name: 'High priority routing',
-    when: 'Ticket created',
-    condition: 'Priority is High',
-    action: 'Assign to on-call lead',
-    enabled: true,
-  },
-  {
-    id: 'AUTO-18',
-    name: 'Waiting on user reminder',
-    when: 'Status idle 48h',
-    condition: 'Status is Waiting on User',
-    action: 'Send reminder email',
-    enabled: true,
-  },
-];
-
-const cannedSeed = [
-  { id: 'CAN-01', title: 'Request received', body: 'Thanks for reaching out. We have received your request and will update you shortly.' },
-  { id: 'CAN-02', title: 'Need more info', body: 'Could you please provide screenshots or the exact error message so we can continue?' },
-  { id: 'CAN-03', title: 'Resolution summary', body: 'Issue resolved. We updated the configuration and verified service health. Let us know if it recurs.' },
-];
-
-const taskSeed = [
-  { id: 'TSK-451', ticketId: 'INC-4921', title: 'Collect VPN logs', assignee: 'Paul Antic', status: 'In Progress', due: 'Today' },
-  { id: 'TSK-452', ticketId: 'INC-4921', title: 'Schedule ISP check', assignee: 'Geoffrey Heller', status: 'Not started', due: 'Tomorrow' },
-  { id: 'TSK-460', ticketId: 'REQ-4923', title: 'Validate replacement eligibility', assignee: 'Paul Antic', status: 'Completed', due: 'Today' },
-];
-
-const InlineTag = ({ children, className = '' }) => (
-  <span className={`chip${className ? ` ${className}` : ''}`}>{children}</span>
-);
+ 
 
 const ReportKpiCard = ({ item }) => {
   const Icon = item.icon;
@@ -902,17 +672,6 @@ const TicketRow = ({ item, isActive, onSelect, onOpen }) => (
   </button>
 );
 
-const TicketEntry = ({ entry }) => (
-  <div className={`entry-item ${entry.type}`}>
-    <div className="entry-header">
-      <span className={`entry-pill ${entry.type}`}>{entry.type === 'note' ? 'Internal note' : 'Message to requester'}</span>
-      <span className="timestamp">{entry.time}</span>
-    </div>
-    <p className="entry-author">{entry.author}</p>
-    <p className="entry-text">{entry.text}</p>
-  </div>
-);
-
 const TicketPreviewCard = ({ ticket, onOpen, title = 'Ticket preview', compact = false }) => (
   <div className={`ticket-preview-card${compact ? ' compact' : ''}`}>
     <div className="section-title">{title}</div>
@@ -996,49 +755,23 @@ const ChangeRow = ({ item }) => (
   </div>
 );
 
-const toKebabCase = (value) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-
-const getSlaPolicy = (priority) => SLA_POLICIES[priority] || SLA_POLICIES.Medium;
-
-const formatDuration = (ms) => {
-  const totalMinutes = Math.max(0, Math.round(ms / 60000));
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  const parts = [];
-  if (days) parts.push(`${days}d`);
-  if (hours || days) parts.push(`${hours}h`);
-  parts.push(`${minutes}m`);
-  return parts.join(' ');
-};
-
-const buildSlaDisplay = ({ startAt, targetMs, completedAt, now, warnMs }) => {
-  const dueAt = startAt + targetMs;
-  if (completedAt) {
-    const met = completedAt <= dueAt;
-    return {
-      state: met ? 'met' : 'breached',
-      label: met ? `Met in ${formatDuration(completedAt - startAt)}` : `Breached by ${formatDuration(completedAt - dueAt)}`,
-      dueAt,
-    };
-  }
-  const remaining = dueAt - now;
-  if (remaining <= 0) {
-    return {
-      state: 'breached',
-      label: `Breached by ${formatDuration(Math.abs(remaining))}`,
-      dueAt,
-    };
-  }
-  return {
-    state: remaining <= warnMs ? 'at-risk' : 'on-track',
-    label: `Due in ${formatDuration(remaining)}`,
-    dueAt,
-  };
+const PaginationControls = ({ page, pageSize, total, onPageChange, isLoading }) => {
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const canPrev = page > 0;
+  const canNext = page + 1 < totalPages;
+  return (
+    <div className="pagination">
+      <button className="btn btn-ghost btn-small" type="button" disabled={!canPrev || isLoading} onClick={() => onPageChange(page - 1)}>
+        Previous
+      </button>
+      <span className="pagination-meta">
+        Page {page + 1} of {totalPages}
+      </span>
+      <button className="btn btn-ghost btn-small" type="button" disabled={!canNext || isLoading} onClick={() => onPageChange(page + 1)}>
+        Next
+      </button>
+    </div>
+  );
 };
 
 const buildAssetList = (record) => {
@@ -1066,17 +799,20 @@ function AppIT() {
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState('All');
   const [ticketFilter, setTicketFilter] = useState('All');
-  const [approvals, setApprovals] = useState(() => approvalSeed);
-  const [tickets, setTickets] = useState(() => ticketSeed);
-  const [selectedTicketId, setSelectedTicketId] = useState(() => ticketSeed[0]?.id ?? '');
-  const [noteDraft, setNoteDraft] = useState('');
-  const [now, setNow] = useState(() => Date.now());
+  const [approvals, setApprovals] = useState([]);
+  const [tickets, setTickets] = useState([]);
+  const [selectedTicketId, setSelectedTicketId] = useState('');
+  const [ticketsMeta, setTicketsMeta] = useState({ total: 0, limit: TICKET_PAGE_SIZE, offset: 0 });
+  const [approvalsMeta, setApprovalsMeta] = useState({ total: 0, limit: APPROVAL_PAGE_SIZE, offset: 0 });
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [ticketsError, setTicketsError] = useState('');
+  const [approvalsError, setApprovalsError] = useState('');
+  const [ticketPage, setTicketPage] = useState(0);
+  const [approvalPage, setApprovalPage] = useState(0);
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [reportRange, setReportRange] = useState(reportRanges[0]);
-  const [tasks, setTasks] = useState(() => taskSeed);
-  const [taskDraft, setTaskDraft] = useState({ title: '', assignee: ASSIGNEES[0], due: '' });
-  const [showTasks, setShowTasks] = useState(false);
-  const [automationRules, setAutomationRules] = useState(() => automationSeed);
+  const [automationRules, setAutomationRules] = useState([]);
   const [automationDraft, setAutomationDraft] = useState({
     name: '',
     when: 'Ticket created',
@@ -1084,9 +820,12 @@ function AppIT() {
     action: 'Assign to on-call lead',
   });
   const [automationLog, setAutomationLog] = useState([]);
-  const [cannedResponses, setCannedResponses] = useState(() => cannedSeed);
+  const [cannedResponses, setCannedResponses] = useState([]);
   const [cannedDraft, setCannedDraft] = useState({ title: '', body: '' });
-  const [selectedCannedId, setSelectedCannedId] = useState(cannedSeed[0]?.id ?? '');
+  const [selectedCannedId, setSelectedCannedId] = useState('');
+  const [pendingCannedBody, setPendingCannedBody] = useState('');
+  const [automationError, setAutomationError] = useState('');
+  const [cannedError, setCannedError] = useState('');
   const [theme, setTheme] = useState('light');
   const [authEmail, setAuthEmail] = useState('');
   const [authError, setAuthError] = useState('');
@@ -1113,31 +852,6 @@ function AppIT() {
       return matchesFilter && matchesTerm;
     });
   }, [workFilter, search]);
-
-  const filteredApprovals = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return approvals.filter((item) => {
-      if (!term) return true;
-      return (
-        item.title.toLowerCase().includes(term) ||
-        item.id.toLowerCase().includes(term) ||
-        item.requester.toLowerCase().includes(term)
-      );
-    });
-  }, [approvals, search]);
-
-  const filteredTickets = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return tickets.filter((item) => {
-      const matchesFilter = ticketFilter === 'All' || item.status === ticketFilter;
-      const matchesTerm =
-        !term ||
-        item.title.toLowerCase().includes(term) ||
-        item.id.toLowerCase().includes(term) ||
-        item.requester.toLowerCase().includes(term);
-      return matchesFilter && matchesTerm;
-    });
-  }, [tickets, ticketFilter, search]);
 
   const myWorkTickets = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1174,55 +888,143 @@ function AppIT() {
   }, [tickets]);
   const reportData = reportDataByRange[reportRange];
 
-  const activeTicket =
-    tickets.find((item) => item.id === selectedTicketId) || filteredTickets[0] || tickets[0];
+  const activeTicket = tickets.find((item) => item.id === selectedTicketId) || tickets[0] || null;
   const requesterRecord = activeTicket?.requesterEmail
     ? employeeLookup.get(activeTicket.requesterEmail.toLowerCase())
     : null;
   const requesterAssets = requesterRecord ? buildAssetList(requesterRecord) : [];
-  const activeTasks = activeTicket ? tasks.filter((task) => task.ticketId === activeTicket.id) : [];
-  const slaPolicy = activeTicket ? getSlaPolicy(activeTicket.priority) : null;
-  const responseSla = activeTicket?.createdAt
-    ? buildSlaDisplay({
-        startAt: activeTicket.createdAt,
-        targetMs: slaPolicy.responseMs,
-        completedAt: activeTicket.respondedAt,
-        now,
-        warnMs: slaPolicy.responseWarnMs,
-      })
-    : null;
-  const resolveSla = activeTicket?.createdAt
-    ? buildSlaDisplay({
-        startAt: activeTicket.createdAt,
-        targetMs: slaPolicy.resolveMs,
-        completedAt: activeTicket.resolvedAt,
-        now,
-        warnMs: slaPolicy.resolveWarnMs,
-      })
-    : null;
+
+  const ticketQuery = useMemo(() => {
+    const query = {
+      limit: TICKET_PAGE_SIZE,
+      offset: ticketPage * TICKET_PAGE_SIZE,
+    };
+    const term = search.trim();
+    if (term) query.q = term;
+    if (activeSection === 'my-work') {
+      if (currentUser) query.assignee = currentUser;
+    } else if (['tickets', 'ticket-detail'].includes(activeSection) && ticketFilter !== 'All') {
+      query.status = ticketFilter;
+    }
+    return query;
+  }, [activeSection, currentUser, search, ticketFilter, ticketPage]);
+
+  const approvalQuery = useMemo(() => {
+    const query = {
+      limit: APPROVAL_PAGE_SIZE,
+      offset: approvalPage * APPROVAL_PAGE_SIZE,
+    };
+    if (activeSection === 'approvals') {
+      const term = search.trim();
+      if (term) query.q = term;
+    }
+    return query;
+  }, [activeSection, approvalPage, search]);
 
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(interval);
-  }, []);
+    const shouldLoad = ['tickets', 'ticket-detail', 'overview', 'my-work'].includes(activeSection);
+    if (!shouldLoad) return undefined;
+    let isActive = true;
+    const loadTickets = async () => {
+      setTicketsLoading(true);
+      setTicketsError('');
+      try {
+        const response = await fetchTickets(ticketQuery);
+        if (!isActive) return;
+        setTickets(response.tickets || []);
+        setTicketsMeta(response.meta || { total: 0, limit: TICKET_PAGE_SIZE, offset: 0 });
+      } catch (error) {
+        if (!isActive) return;
+        setTicketsError('Unable to load tickets right now.');
+      } finally {
+        if (isActive) setTicketsLoading(false);
+      }
+    };
+    loadTickets();
+    return () => {
+      isActive = false;
+    };
+  }, [activeSection, ticketQuery]);
+
+  useEffect(() => {
+    if (!['approvals', 'overview'].includes(activeSection)) return undefined;
+    let isActive = true;
+    const loadApprovals = async () => {
+      setApprovalsLoading(true);
+      setApprovalsError('');
+      try {
+        const response = await fetchApprovals(approvalQuery);
+        if (!isActive) return;
+        setApprovals(response.approvals || []);
+        setApprovalsMeta(response.meta || { total: 0, limit: APPROVAL_PAGE_SIZE, offset: 0 });
+      } catch (error) {
+        if (!isActive) return;
+        setApprovalsError('Unable to load approvals right now.');
+      } finally {
+        if (isActive) setApprovalsLoading(false);
+      }
+    };
+    loadApprovals();
+    return () => {
+      isActive = false;
+    };
+  }, [activeSection, approvalQuery]);
 
   useEffect(() => {
     let isActive = true;
-    const loadData = async () => {
+    const loadAutomation = async () => {
+      setAutomationError('');
       try {
-        const [ticketsFromDb, approvalsFromDb] = await Promise.all([fetchTickets(), fetchApprovals()]);
+        const rules = await fetchAutomationRules();
         if (!isActive) return;
-        if (ticketsFromDb.length) setTickets(ticketsFromDb);
-        if (approvalsFromDb.length) setApprovals(approvalsFromDb);
+        setAutomationRules(rules);
       } catch (error) {
-        console.error('Failed to load Neon data', error);
+        if (!isActive) return;
+        setAutomationError('Unable to load automation rules.');
       }
     };
-    loadData();
+    loadAutomation();
     return () => {
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadCanned = async () => {
+      setCannedError('');
+      try {
+        const responses = await fetchCannedResponses();
+        if (!isActive) return;
+        setCannedResponses(responses);
+      } catch (error) {
+        if (!isActive) return;
+        setCannedError('Unable to load canned responses.');
+      }
+    };
+    loadCanned();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCannedId && cannedResponses.length) {
+      setSelectedCannedId(cannedResponses[0].id);
+    }
+  }, [cannedResponses, selectedCannedId]);
+
+  useEffect(() => {
+    if (['tickets', 'ticket-detail', 'overview', 'my-work'].includes(activeSection)) {
+      setTicketPage(0);
+    }
+  }, [activeSection, currentUser, search, ticketFilter]);
+
+  useEffect(() => {
+    if (activeSection === 'approvals') {
+      setApprovalPage(0);
+    }
+  }, [activeSection, search]);
 
   useEffect(() => {
     if (!tickets.length) return;
@@ -1273,7 +1075,6 @@ function AppIT() {
 
   const handleSelectTicket = (id) => {
     setSelectedTicketId(id);
-    setNoteDraft('');
   };
 
   const handleOpenTicket = (id) => {
@@ -1306,9 +1107,16 @@ function AppIT() {
         description: 'Created from Team Queue.',
         entries: [],
       };
-      setTickets((prev) => (prev.some((item) => item.id === newTicket.id) ? prev : [newTicket, ...prev]));
+      let added = false;
+      setTickets((prev) => {
+        if (prev.some((item) => item.id === newTicket.id)) return prev;
+        added = true;
+        return [newTicket, ...prev];
+      });
+      if (added) {
+        setTicketsMeta((prev) => ({ ...prev, total: prev.total + 1 }));
+      }
       setSelectedTicketId(newTicket.id);
-      setNoteDraft('');
       setActiveSection('ticket-detail');
     }
   };
@@ -1348,49 +1156,28 @@ function AppIT() {
     setAuthError('');
   };
 
-  const handleAddEntry = (type) => {
-    const text = noteDraft.trim();
-    if (!text || !activeTicket) return;
-    const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    const entry = { id: `entry-${Date.now()}`, type, author: currentUser, time, text };
+  const handleAddEntry = (ticketId, entry) => {
+    if (!ticketId || !entry) return;
     let nextForRequest = null;
     setTickets((prev) =>
-      prev.map((item) =>
-        item.id === activeTicket.id
-          ? (() => {
-              const next = {
-                ...item,
-                entries: [...(item.entries || []), entry],
-              };
-              nextForRequest = next;
-              return next;
-            })()
-          : item,
-      ),
+      prev.map((item) => {
+        if (item.id !== ticketId) return item;
+        const next = {
+          ...item,
+          entries: [...(item.entries || []), entry],
+        };
+        nextForRequest = next;
+        return next;
+      }),
     );
     if (nextForRequest) {
-      updateTicket(activeTicket.id, nextForRequest).catch((error) => {
+      updateTicket(ticketId, nextForRequest).catch((error) => {
         console.error('Failed to append entry', error);
       });
     }
-    setNoteDraft('');
   };
 
   const createId = (prefix) => `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
-
-  const handleAddTask = () => {
-    if (!activeTicket || !taskDraft.title.trim()) return;
-    const newTask = {
-      id: createId('TSK'),
-      ticketId: activeTicket.id,
-      title: taskDraft.title.trim(),
-      assignee: taskDraft.assignee,
-      status: 'Not started',
-      due: taskDraft.due || 'Unscheduled',
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    setTaskDraft({ title: '', assignee: ASSIGNEES[0], due: '' });
-  };
 
   const handleAddAutomation = () => {
     if (!automationDraft.name.trim()) return;
@@ -1409,25 +1196,58 @@ function AppIT() {
       condition: 'Priority is High',
       action: 'Assign to on-call lead',
     });
+    createAutomationRule(newRule).catch((error) => {
+      console.error('Failed to save automation rule', error);
+      setAutomationError('Unable to save the automation rule.');
+    });
+  };
+
+  const handleToggleAutomation = (rule) => {
+    const nextEnabled = !rule.enabled;
+    setAutomationRules((prev) =>
+      prev.map((item) => (item.id === rule.id ? { ...item, enabled: nextEnabled } : item)),
+    );
+    updateAutomationRule(rule.id, { enabled: nextEnabled }).catch((error) => {
+      console.error('Failed to update automation rule', error);
+      setAutomationError('Unable to update the automation rule.');
+    });
   };
 
   const handleRunAutomation = () => {
     if (!automationRules.length) return;
     let updatedTickets = [...tickets];
+    const changedTickets = new Map();
     automationRules.forEach((rule) => {
       if (!rule.enabled) return;
       if (rule.condition === 'Priority is High') {
         updatedTickets = updatedTickets.map((ticket) =>
-          ticket.priority === 'High' ? { ...ticket, assignee: 'Erik Lofgren' } : ticket,
+          ticket.priority === 'High'
+            ? (() => {
+                const next = { ...ticket, assignee: 'Erik Lofgren' };
+                changedTickets.set(ticket.id, next);
+                return next;
+              })()
+            : ticket,
         );
       }
       if (rule.condition === 'Status is Waiting on User') {
         updatedTickets = updatedTickets.map((ticket) =>
-          ticket.status === 'Waiting on User' ? { ...ticket, status: 'In Review' } : ticket,
+          ticket.status === 'Waiting on User'
+            ? (() => {
+                const next = { ...ticket, status: 'In Review' };
+                changedTickets.set(ticket.id, next);
+                return next;
+              })()
+            : ticket,
         );
       }
     });
     setTickets(updatedTickets);
+    changedTickets.forEach((ticket) => {
+      updateTicket(ticket.id, ticket).catch((error) => {
+        console.error('Failed to apply automation update', error);
+      });
+    });
     const timestamp = new Date().toLocaleString();
     setAutomationLog((prev) => [
       { id: `log-${Date.now()}`, text: `Automations applied at ${timestamp}.`, when: timestamp },
@@ -1445,12 +1265,10 @@ function AppIT() {
     setCannedResponses((prev) => [newResponse, ...prev]);
     setCannedDraft({ title: '', body: '' });
     setSelectedCannedId(newResponse.id);
-  };
-
-  const handleInsertCanned = () => {
-    const response = cannedResponses.find((item) => item.id === selectedCannedId);
-    if (!response) return;
-    setNoteDraft((prev) => (prev ? `${prev}\n\n${response.body}` : response.body));
+    createCannedResponse(newResponse).catch((error) => {
+      console.error('Failed to save canned response', error);
+      setCannedError('Unable to save the canned response.');
+    });
   };
 
   const handleNavigate = (targetId) => {
@@ -1661,20 +1479,39 @@ function AppIT() {
                 </div>
                 <div className="tickets-layout">
                   <div className="ticket-list">
-                    {filteredTickets.map((item) => (
-                      <TicketRow
-                        key={item.id}
-                        item={item}
-                        isActive={activeTicket?.id === item.id}
-                        onSelect={handleSelectTicket}
-                        onOpen={handleOpenTicket}
-                      />
-                    ))}
-                    {filteredTickets.length === 0 && (
+                    {ticketsError && (
+                      <div className="empty-state">
+                        <p>{ticketsError}</p>
+                      </div>
+                    )}
+                    {ticketsLoading && !ticketsError && (
+                      <div className="empty-state">
+                        <p>Loading tickets...</p>
+                      </div>
+                    )}
+                    {!ticketsLoading &&
+                      !ticketsError &&
+                      tickets.map((item) => (
+                        <TicketRow
+                          key={item.id}
+                          item={item}
+                          isActive={activeTicket?.id === item.id}
+                          onSelect={handleSelectTicket}
+                          onOpen={handleOpenTicket}
+                        />
+                      ))}
+                    {!ticketsLoading && !ticketsError && tickets.length === 0 && (
                       <div className="empty-state">
                         <p>No tickets match this filter. Try adjusting the search or filter.</p>
                       </div>
                     )}
+                    <PaginationControls
+                      page={ticketPage}
+                      pageSize={TICKET_PAGE_SIZE}
+                      total={ticketsMeta.total || tickets.length}
+                      onPageChange={setTicketPage}
+                      isLoading={ticketsLoading}
+                    />
                   </div>
                   <div className="ticket-preview-panel">
                     <TicketPreviewCard title="Quick preview" ticket={activeTicket} onOpen={handleOpenTicket} compact />
@@ -1685,365 +1522,24 @@ function AppIT() {
             )}
 
             {activeSection === 'ticket-detail' && (
-              <section className="card ticket-detail-page">
-                <div className="ticket-detail-hero">
-                  <div>
-                    <button className="btn btn-ghost btn-small" type="button" onClick={() => handleNavigate('tickets')}>
-                      Back to tickets
-                    </button>
-                    <div className="section-title">Ticket workspace</div>
-                    <h2 className="section-heading">
-                      {activeTicket ? `${activeTicket.id} - ${activeTicket.title}` : 'Ticket details'}
-                    </h2>
-                    <p className="section-sub">Full-screen view with requester context, SLAs, and updates.</p>
-                  </div>
-                  {activeTicket && (
-                    <div className="ticket-detail-hero-meta">
-                      <InlineTag>{activeTicket.type}</InlineTag>
-                      <span className={`priority-tag ${toKebabCase(activeTicket.priority)}`}>{activeTicket.priority}</span>
-                      <span className={`status-pill status-${toKebabCase(activeTicket.status)}`}>{activeTicket.status}</span>
-                    </div>
-                  )}
-                </div>
-
-                {activeTicket ? (
-                  <div className="ticket-detail">
-                    <div className="ticket-detail-header">
-                      <div>
-                        <div className="list-inline">
-                          <InlineTag>{activeTicket.type}</InlineTag>
-                          <InlineTag className="mono">{activeTicket.id}</InlineTag>
-                          <span className={`priority-tag ${toKebabCase(activeTicket.priority)}`}>{activeTicket.priority}</span>
-                          <span className={`status-pill status-${toKebabCase(activeTicket.status)}`}>{activeTicket.status}</span>
-                        </div>
-                        <h3 className="ticket-title">{activeTicket.title}</h3>
-                        <p className="work-meta">
-                          {activeTicket.requester} - {activeTicket.requesterEmail}
-                        </p>
-                        <p className="work-meta">
-                          {activeTicket.department} | Preferred contact: {activeTicket.contactPreference}
-                        </p>
-                      </div>
-                      <div className="ticket-actions">
-                        <button
-                          className="btn btn-ghost btn-small"
-                          type="button"
-                          disabled={['Resolved', 'Closed'].includes(activeTicket.status)}
-                          onClick={() => handleTicketUpdate(activeTicket.id, { assignee: currentUser })}
-                        >
-                          Assign to me
-                        </button>
-                        <button
-                          className="btn btn-primary btn-small"
-                          type="button"
-                          disabled={['Resolved', 'Closed'].includes(activeTicket.status)}
-                          onClick={() => handleTicketUpdate(activeTicket.id, { status: 'Resolved' })}
-                        >
-                          Resolve
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="ticket-detail-grid">
-                      <div className="detail-card">
-                        <div className="detail-label">Category</div>
-                        <div className="detail-value">{activeTicket.category}</div>
-                        <div className="detail-label">Impact</div>
-                        <div className="detail-value">{activeTicket.impact}</div>
-                        <div className="detail-label">Urgency</div>
-                        <div className="detail-value">{activeTicket.urgency}</div>
-                      </div>
-                      <div className="detail-card">
-                        <div className="detail-label">Device / Asset</div>
-                        <div className="detail-value">{activeTicket.device}</div>
-                        <div className="detail-label">Created</div>
-                        <div className="detail-value">{activeTicket.created}</div>
-                      </div>
-                      <div className="detail-card">
-                        <div className="detail-label">Intake</div>
-                        <div className="detail-value">{INTAKE_SOURCE}</div>
-                        <div className="detail-label">Inbox</div>
-                        <div className="detail-value">{INTAKE_EMAIL}</div>
-                      </div>
-                      <div className="detail-card">
-                        <label className="control-label">
-                          <span>Assignee</span>
-                          <select
-                            className="control-select"
-                            value={activeTicket.assignee}
-                            onChange={(event) => handleTicketUpdate(activeTicket.id, { assignee: event.target.value })}
-                          >
-                            {ASSIGNEES.map((assignee) => (
-                              <option key={assignee} value={assignee}>
-                                {assignee}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="control-label">
-                          <span>Status</span>
-                          <select
-                            className="control-select"
-                            value={activeTicket.status}
-                            onChange={(event) => handleTicketUpdate(activeTicket.id, { status: event.target.value })}
-                          >
-                            {STATUS_OPTIONS.map((option) => (
-                              <option key={option} value={option}>
-                                {option}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="ticket-profile">
-                      <div className="detail-card">
-                        <div className="detail-label">Requester profile</div>
-                        {requesterRecord ? (
-                          <div className="profile-grid">
-                            <div>
-                              <div className="detail-value">
-                                {requesterRecord.firstName} {requesterRecord.lastName}
-                              </div>
-                              <div className="profile-meta">{requesterRecord.jobTitle}</div>
-                              <div className="profile-meta">
-                                {requesterRecord.department} - {requesterRecord.location}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="detail-label">Supervisor</div>
-                              <div className="detail-value">{requesterRecord.supervisor || 'Not listed'}</div>
-                              <div className="detail-label">Start date</div>
-                              <div className="detail-value">{requesterRecord.startDate || 'Not listed'}</div>
-                            </div>
-                            <div>
-                              <div className="detail-label">Email</div>
-                              <div className="detail-value">{requesterRecord.email}</div>
-                              <div className="detail-label">Mobile</div>
-                              <div className="detail-value">{requesterRecord.mobilePhone || 'Not listed'}</div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="detail-value">No employee record found in Employee Information Hub.</div>
-                        )}
-                      </div>
-                      <div className="detail-card">
-                        <div className="detail-label">Assigned assets</div>
-                        {requesterRecord ? (
-                          <div className="asset-grid">
-                            {requesterAssets.map((asset) => (
-                              <div key={asset.label} className="asset-chip">
-                                <span>{asset.label}</span>
-                                <strong>{asset.value}</strong>
-                              </div>
-                            ))}
-                            {requesterAssets.length === 0 && <div className="detail-value">No assets listed.</div>}
-                          </div>
-                        ) : (
-                          <div className="detail-value">No assets listed.</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="ticket-sla">
-                      <div className="detail-card sla-card">
-                        <div className="detail-label">Response SLA</div>
-                        {responseSla && (
-                          <>
-                            <div className="sla-row">
-                              <span className={`sla-state ${responseSla.state}`}>{SLA_STATE_LABELS[responseSla.state]}</span>
-                              <span className="sla-value">{responseSla.label}</span>
-                            </div>
-                            <div className="sla-meta">Target: {formatDuration(slaPolicy.responseMs)}</div>
-                          </>
-                        )}
-                      </div>
-                      <div className="detail-card sla-card">
-                        <div className="detail-label">Resolution SLA</div>
-                        {resolveSla && (
-                          <>
-                            <div className="sla-row">
-                              <span className={`sla-state ${resolveSla.state}`}>{SLA_STATE_LABELS[resolveSla.state]}</span>
-                              <span className="sla-value">{resolveSla.label}</span>
-                            </div>
-                            <div className="sla-meta">Target: {formatDuration(slaPolicy.resolveMs)}</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="detail-card escalation-card">
-                      <div className="detail-label">Escalation rules ({activeTicket.priority})</div>
-                      <ul className="escalation-list">
-                        {slaPolicy.escalation.map((rule) => (
-                          <li key={rule}>{rule}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div className="detail-card task-card">
-                      <div className="task-header">
-                        <div className="detail-label">Tasks</div>
-                        <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowTasks((prev) => !prev)}>
-                          {showTasks ? 'Hide tasks' : 'Show tasks'}
-                        </button>
-                      </div>
-                      {showTasks && (
-                        <>
-                          <div className="task-list">
-                            {activeTasks.length === 0 && <p className="empty-text">No tasks for this ticket yet.</p>}
-                            {activeTasks.map((task) => (
-                              <div key={task.id} className="task-row">
-                                <div>
-                                  <div className="list-inline">
-                                    <InlineTag className="mono">{task.id}</InlineTag>
-                                    <span className={`status-pill status-${toKebabCase(task.status)}`}>{task.status}</span>
-                                  </div>
-                                  <p className="work-title">{task.title}</p>
-                                  <p className="work-meta">
-                                    {task.assignee} - Due {task.due}
-                                  </p>
-                                </div>
-                                <button
-                                  className="btn btn-ghost btn-small"
-                                  type="button"
-                                  onClick={() =>
-                                    setTasks((prev) =>
-                                      prev.map((item) =>
-                                        item.id === task.id
-                                          ? {
-                                              ...item,
-                                              status: item.status === 'Completed' ? 'Not started' : 'Completed',
-                                            }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                >
-                                  {task.status === 'Completed' ? 'Reopen' : 'Complete'}
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="task-form">
-                            <label className="label">
-                              Task title
-                              <input
-                                className="input"
-                                value={taskDraft.title}
-                                onChange={(event) => setTaskDraft((prev) => ({ ...prev, title: event.target.value }))}
-                                placeholder="e.g. Validate user access request"
-                              />
-                            </label>
-                            <label className="label">
-                              Assignee
-                              <select
-                                className="control-select"
-                                value={taskDraft.assignee}
-                                onChange={(event) => setTaskDraft((prev) => ({ ...prev, assignee: event.target.value }))}
-                              >
-                                {ASSIGNEES.map((assignee) => (
-                                  <option key={assignee} value={assignee}>
-                                    {assignee}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                            <label className="label">
-                              Due date
-                              <input
-                                className="input"
-                                value={taskDraft.due}
-                                onChange={(event) => setTaskDraft((prev) => ({ ...prev, due: event.target.value }))}
-                                placeholder="e.g. Tomorrow 3:00p"
-                              />
-                            </label>
-                            <button className="btn btn-primary btn-small" type="button" onClick={handleAddTask}>
-                              Add task
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="ticket-description">
-                      <div className="detail-label">Description</div>
-                      <p>{activeTicket.description}</p>
-                    </div>
-
-                    <div className="ticket-activity">
-                      <div className="activity-header">
-                        <h4>Notes and messages</h4>
-                        <span className="timestamp">{activeTicket.entries?.length || 0} updates</span>
-                      </div>
-                      <div className="entry-list">
-                        {(activeTicket.entries || []).map((entry) => (
-                          <TicketEntry key={entry.id} entry={entry} />
-                        ))}
-                        {(!activeTicket.entries || activeTicket.entries.length === 0) && (
-                          <div className="empty-state">
-                            <p>No updates yet. Add a note or message below.</p>
-                          </div>
-                        )}
-                      </div>
-                      <div className="entry-composer">
-                        <div className="composer-row">
-                          <label className="control-label">
-                            <span>Canned response</span>
-                            <select
-                              className="control-select"
-                              value={selectedCannedId}
-                              onChange={(event) => setSelectedCannedId(event.target.value)}
-                            >
-                              {cannedResponses.map((response) => (
-                                <option key={response.id} value={response.id}>
-                                  {response.title}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <button className="btn btn-ghost btn-small" type="button" onClick={handleInsertCanned}>
-                            Insert
-                          </button>
-                        </div>
-                        <label className="label">
-                          Add update
-                          <textarea
-                            className="textarea"
-                            value={noteDraft}
-                            onChange={(event) => setNoteDraft(event.target.value)}
-                            placeholder="Add troubleshooting notes or a response to the requester."
-                          />
-                        </label>
-                        <div className="entry-actions">
-                          <button
-                            className="btn btn-ghost btn-small"
-                            type="button"
-                            disabled={!noteDraft.trim()}
-                            onClick={() => handleAddEntry('note')}
-                          >
-                            Add internal note
-                          </button>
-                          <button
-                            className="btn btn-primary btn-small"
-                            type="button"
-                            disabled={!noteDraft.trim()}
-                            onClick={() => handleAddEntry('message')}
-                          >
-                            Send message to requester
-                          </button>
-                        </div>
-                        <p className="entry-hint">Internal notes are only visible to IT. Messages go to the requester.</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="empty-state">
-                    <p>Select a ticket from the queue to view details.</p>
-                  </div>
-                )}
-              </section>
+              <TicketDetail
+                activeTicket={activeTicket}
+                currentUser={currentUser}
+                assignees={ASSIGNEES}
+                statusOptions={STATUS_OPTIONS}
+                intakeEmail={INTAKE_EMAIL}
+                intakeSource={INTAKE_SOURCE}
+                requesterRecord={requesterRecord}
+                requesterAssets={requesterAssets}
+                cannedResponses={cannedResponses}
+                selectedCannedId={selectedCannedId}
+                onSelectCannedId={setSelectedCannedId}
+                pendingCannedBody={pendingCannedBody}
+                onConsumeCannedBody={() => setPendingCannedBody('')}
+                onBack={() => handleNavigate('tickets')}
+                onTicketUpdate={handleTicketUpdate}
+                onAddEntry={handleAddEntry}
+              />
             )}
 
             {activeSection === 'my-work' && (
@@ -2123,14 +1619,31 @@ function AppIT() {
                 <h2 className="section-heading">Requests waiting on you</h2>
                 <p className="section-sub">Approve quickly, or deny with feedback when needed.</p>
                 <div className="approval-list">
-                  {filteredApprovals.map((item) => (
-                    <ApprovalRow key={item.id} item={item} onDecision={handleApprovalDecision} />
-                  ))}
-                  {filteredApprovals.length === 0 && (
+                  {approvalsError && (
+                    <div className="empty-state">
+                      <p>{approvalsError}</p>
+                    </div>
+                  )}
+                  {approvalsLoading && !approvalsError && (
+                    <div className="empty-state">
+                      <p>Loading approvals...</p>
+                    </div>
+                  )}
+                  {!approvalsLoading &&
+                    !approvalsError &&
+                    approvals.map((item) => <ApprovalRow key={item.id} item={item} onDecision={handleApprovalDecision} />)}
+                  {!approvalsLoading && !approvalsError && approvals.length === 0 && (
                     <div className="empty-state">
                       <p>No approvals match your search.</p>
                     </div>
                   )}
+                  <PaginationControls
+                    page={approvalPage}
+                    pageSize={APPROVAL_PAGE_SIZE}
+                    total={approvalsMeta.total || approvals.length}
+                    onPageChange={setApprovalPage}
+                    isLoading={approvalsLoading}
+                  />
                 </div>
               </section>
             )}
@@ -2524,6 +2037,11 @@ function AppIT() {
                 <div className="section-title">Automation</div>
                 <h2 className="section-heading">Workflow rules and triggers</h2>
                 <p className="section-sub">Automate routing, notifications, and ticket updates.</p>
+                {automationError && (
+                  <div className="form-alert error">
+                    <div className="form-alert-message">{automationError}</div>
+                  </div>
+                )}
                 <div className="record-list">
                   {automationRules.map((rule) => (
                     <div key={rule.id} className="record-row">
@@ -2542,11 +2060,7 @@ function AppIT() {
                       <button
                         className="btn btn-ghost btn-small"
                         type="button"
-                        onClick={() =>
-                          setAutomationRules((prev) =>
-                            prev.map((item) => (item.id === rule.id ? { ...item, enabled: !item.enabled } : item)),
-                          )
-                        }
+                        onClick={() => handleToggleAutomation(rule)}
                       >
                         {rule.enabled ? 'Disable' : 'Enable'}
                       </button>
@@ -2627,6 +2141,11 @@ function AppIT() {
                 <div className="section-title">Canned Responses</div>
                 <h2 className="section-heading">Reusable reply templates</h2>
                 <p className="section-sub">Keep messaging consistent across the team.</p>
+                {cannedError && (
+                  <div className="form-alert error">
+                    <div className="form-alert-message">{cannedError}</div>
+                  </div>
+                )}
                 <div className="record-list">
                   {cannedResponses.map((response) => (
                     <div key={response.id} className="record-row">
@@ -2642,7 +2161,7 @@ function AppIT() {
                         type="button"
                         onClick={() => {
                           setSelectedCannedId(response.id);
-                          handleInsertCanned();
+                          setPendingCannedBody(response.body);
                           setActiveSection('ticket-detail');
                         }}
                       >
