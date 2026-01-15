@@ -1,4 +1,5 @@
 import React from 'react';
+import { toDisplayText } from '../utils/tickets';
 
 const TicketEntry = ({ entry }) => (
   <div className={`entry-item ${entry.type}`}>
@@ -6,8 +7,8 @@ const TicketEntry = ({ entry }) => (
       <span className={`entry-pill ${entry.type}`}>{entry.type === 'note' ? 'Internal note' : 'Message to requester'}</span>
       <span className="timestamp">{entry.time}</span>
     </div>
-    <p className="entry-author">{entry.author}</p>
-    <p className="entry-text">{entry.text}</p>
+    <p className="entry-author">{toDisplayText(entry.author)}</p>
+    <p className="entry-text">{toDisplayText(entry.text)}</p>
   </div>
 );
 
