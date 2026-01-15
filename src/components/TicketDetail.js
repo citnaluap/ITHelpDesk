@@ -3,6 +3,7 @@ import InlineTag from './InlineTag';
 import TicketEntry from './TicketEntry';
 import { buildSlaDisplay, formatDuration, getSlaPolicy, SLA_STATE_LABELS } from '../utils/sla';
 import { toKebabCase } from '../utils/format';
+import { getTicketDescription } from '../utils/tickets';
 import { createTask, fetchTasks, updateTask } from '../api';
 
 const createId = (prefix) => `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
@@ -98,6 +99,7 @@ function TicketDetail({
     () => cannedResponses.map((response) => ({ id: response.id, title: response.title, body: response.body })),
     [cannedResponses],
   );
+  const descriptionText = getTicketDescription(activeTicket);
 
   const handleAddEntry = (type) => {
     if (!activeTicket) return;
@@ -436,7 +438,7 @@ function TicketDetail({
 
         <div className="ticket-description">
           <div className="detail-label">Description</div>
-          <p>{activeTicket.description}</p>
+          {descriptionText ? <p className="ticket-description-text">{descriptionText}</p> : <p className="work-meta">No description provided.</p>}
         </div>
 
         <div className="ticket-activity">

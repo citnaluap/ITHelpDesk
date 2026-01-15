@@ -1852,6 +1852,10 @@ body.dark-mode .report-card-icon {
   color: var(--muted);
 }
 
+.ticket-description-text {
+  white-space: pre-wrap;
+}
+
 .ticket-activity {
   display: grid;
   gap: 12px;

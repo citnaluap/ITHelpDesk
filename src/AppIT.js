@@ -41,6 +41,7 @@ import {
 import InlineTag from './components/InlineTag';
 import TicketDetail from './components/TicketDetail';
 import { toKebabCase } from './utils/format';
+import { getTicketDescription } from './utils/tickets';
 
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
 const TICKET_FILTERS = ['All', 'New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
@@ -919,7 +920,7 @@ const TicketPreviewCard = ({ ticket, onOpen, title = 'Ticket preview', compact =
         <p className="work-meta">
           {ticket.requester} - {ticket.requesterEmail}
         </p>
-        <p className="preview-description">{ticket.description}</p>
+        <p className="preview-description">{getTicketDescription(ticket) || 'No description provided yet.'}</p>
         <div className="preview-grid">
           <div>
             <div className="detail-label">Impact</div>
