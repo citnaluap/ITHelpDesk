@@ -66,9 +66,34 @@ const parseEmailBody = (body) => {
   return { ticketNumber, subject, requester, description };
 };
 
+const parseFromField = (value) => {
+  if (!value) return { name: '', email: '' };
+  if (typeof value === 'object') {
+    const email = value.address || value.email || '';
+    const name = value.name || '';
+    return { name, email };
+  }
+  if (typeof value !== 'string') return { name: '', email: '' };
+  const match = value.match(/(.*)<(.+@.+)>/);
+  if (match) {
+    return { name: match[1].trim().replace(/^\"|\"$/g, ''), email: match[2].trim() };
+  }
+  if (value.includes('@')) {
+    return { name: '', email: value.trim() };
+  }
+  return { name: value.trim(), email: '' };
+};
+
 const mapPayloadToTicket = (payload) => {
   const ticket = payload?.ticket || payload?.data || payload || {};
-  const bodyContent = payload?.body?.content || payload?.body || '';
+  const bodyContent =
+    payload?.cleanMessage ||
+    payload?.rawText ||
+    payload?.body?.content ||
+    payload?.body ||
+    payload?.text ||
+    payload?.content ||
+    '';
   const parsedEmail = parseEmailBody(bodyContent);
   const rawId =
     ticket.id ||
@@ -85,6 +110,7 @@ const mapPayloadToTicket = (payload) => {
     ticket.createdAt ||
     ticket.created_date ||
     ticket.created ||
+    payload?.received ||
     payload?.createdAt ||
     payload?.receivedDateTime;
   const parsedCreatedAt = createdAtValue ? new Date(createdAtValue).getTime() : NaN;
@@ -94,17 +120,21 @@ const mapPayloadToTicket = (payload) => {
     payload?.from?.emailAddress?.name ||
     payload?.from?.address ||
     payload?.from?.name ||
-    payload?.from;
+    payload?.from ||
+    payload?.sender;
+  const parsedFrom = parseFromField(payload?.from || payload?.sender || from);
   const requesterName =
     payload?.from?.emailAddress?.name ||
     payload?.from?.name ||
     (typeof from === 'string' ? from : '') ||
+    parsedFrom.name ||
     '' ||
     parsedEmail.requester;
   const requesterEmail =
     payload?.from?.emailAddress?.address ||
     payload?.from?.address ||
     (typeof from === 'string' && from.includes('@') ? from : '') ||
+    parsedFrom.email ||
     '';
 
   return {
@@ -123,6 +153,7 @@ const mapPayloadToTicket = (payload) => {
       ticket.requesterName ||
       ticket.contactName ||
       ticket.name ||
+      (typeof payload?.from === 'string' ? payload.from : '') ||
       requesterName ||
       'Unknown requester',
     requesterEmail:
@@ -154,6 +185,8 @@ const mapPayloadToTicket = (payload) => {
       ticket.description ||
       ticket.details ||
       ticket.notes ||
+      payload?.cleanMessage ||
+      payload?.rawText ||
       parsedEmail.description ||
       bodyContent ||
       '',
