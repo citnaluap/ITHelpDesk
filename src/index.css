@@ -1826,6 +1826,10 @@ body.dark-mode .report-card-icon {
   color: #e2e8f0;
 }
 
+.kb-list li {
+  color: var(--ink);
+}
+
 .detail-label {
   font-size: 12px;
   font-weight: 700;

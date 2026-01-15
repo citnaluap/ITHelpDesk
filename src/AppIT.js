@@ -433,11 +433,237 @@ const serviceCatalog = [
   { id: 'CAT-404', name: 'Software install - Adobe', type: 'Software', eta: '2 days', approval: 'Cost center' },
 ];
 
-const knowledgeArticles = [
-  { id: 'KB-77', title: 'Resetting MFA device', category: 'Security', updated: 'Sep 4', views: 482 },
-  { id: 'KB-103', title: 'VPN troubleshooting checklist', category: 'Network', updated: 'Aug 28', views: 305 },
-  { id: 'KB-144', title: 'Setting up Teams voice', category: 'Collaboration', updated: 'Aug 20', views: 214 },
-  { id: 'KB-188', title: 'Printer maintenance guide', category: 'Facilities', updated: 'Aug 8', views: 96 },
+const knowledgeArticlesSeed = [
+  {
+    id: 'KB-102',
+    title: 'Form Tracker user and participant management',
+    category: 'Applications',
+    updated: 'Oct 8',
+    views: 412,
+    summary: 'Create staff and participants, assign caseloads, and manage forms safely.',
+    audience: 'HCBS staff, IT support',
+    steps: [
+      'Open https://formtracker.udservices.org/users/login and sign in.',
+      'To create staff: Staff tab > Create New Staff, complete fields, username matches network account, Save.',
+      'To create admin users: Admin tab > Create New User, leave password blank, Active checked, Create.',
+      'Set role: SC = Staff, SC II = Supervisor, Program Specialist = Manager, IT/Admin = Admin.',
+      'To add participants: Participants tab > Create New Participant, enter known details, Save.',
+      'Assign participant to staff: Participants > search > open participant > Staff (left) > Assign New Staff.',
+      'Choose staff, set Start Date, mark Primary if needed, Save.',
+      'Remove forms: Participants > open participant > click trash icon next to form (archived, not deleted).',
+    ],
+    notes: [
+      'If a participant is still listed under the wrong SC, open Staff and change Primary from Yes to No.',
+      'Form Tracker changes are archived and can be recovered if needed.',
+    ],
+  },
+  {
+    id: 'KB-108',
+    title: 'Form Tracker audit access (QMET accounts)',
+    category: 'Compliance',
+    updated: 'Oct 6',
+    views: 176,
+    summary: 'Grant and remove QMET audit access by assigning participants to QMET accounts.',
+    audience: 'Program Specialists, IT support',
+    steps: [
+      'Log in to Form Tracker and open the participant record.',
+      'Click Staff on the left and select Add Staff.',
+      'Add qmet1-qmet5 as needed, set as Primary, and choose the date.',
+      'Repeat for each participant that needs audit access.',
+      'After the audit, open each QMET account in Staff, uncheck Primary, and add end date.',
+      'Repeat cleanup for all participants and QMET accounts.',
+    ],
+    notes: ['QMET accounts share the same password listed in IT documentation.'],
+  },
+  {
+    id: 'KB-114',
+    title: 'MFA setup for eLTSS using WinAuth',
+    category: 'Security',
+    updated: 'Oct 3',
+    views: 389,
+    summary: 'Enroll WinAuth for TOTP MFA on the AmeriHealth eLTSS portal.',
+    audience: 'External users, IT support',
+    steps: [
+      'Open the account confirmation email and select the Setup TOTP Authentication link.',
+      'Launch WinAuth and click Add > Authenticator.',
+      'Name it "AmeriHealth Caritas eLTSS".',
+      'Copy the manual setup code from the email and paste into WinAuth.',
+      'Click Verify Authenticator to generate the six-digit code.',
+      'Enter the six-digit code into the setup page and submit.',
+      'If prompted, skip setting a WinAuth password (recommended for now).',
+      'Log in to https://amerihealth-pennsylvania.eltss.org and enter the MFA code.',
+    ],
+    notes: ['If setup link expires after 7 days, request a new confirmation email.'],
+  },
+  {
+    id: 'KB-121',
+    title: 'Email encryption and EncryptScan basics',
+    category: 'Email',
+    updated: 'Sep 30',
+    views: 268,
+    summary: 'Encrypt outbound email and use EncryptScan on mobile when needed.',
+    audience: 'All staff',
+    steps: [
+      'In Outlook, add the word "encrypt" in the email subject line.',
+      'Attach the file or message content and confirm the recipient address.',
+      'Send the email; encryption is applied automatically.',
+      'For mobile scans, open EncryptScan and follow the iOS/Android guide.',
+      'Verify the recipient can open the secure message.',
+    ],
+  },
+  {
+    id: 'KB-127',
+    title: 'Outlook iOS: update login info',
+    category: 'Mobile',
+    updated: 'Sep 28',
+    views: 205,
+    summary: 'Refresh Outlook iOS credentials after a password change.',
+    audience: 'All staff',
+    steps: [
+      'Open Outlook on iOS and tap the profile icon.',
+      'Tap the account and choose Re-enter Password.',
+      'Enter the updated password and complete MFA if prompted.',
+      'Return to Inbox and verify mail syncs.',
+    ],
+  },
+  {
+    id: 'KB-131',
+    title: 'New hire onboarding checklist',
+    category: 'Onboarding',
+    updated: 'Sep 24',
+    views: 322,
+    summary: 'Walkthrough for laptop setup, VPN access, RDP, and required apps.',
+    audience: 'IT support',
+    steps: [
+      'Verify laptop, charger, and mouse; review device care.',
+      'Connect to Guest WiFi and open Cisco AnyConnect.',
+      'Confirm VPN server is vpn.udservices.org and sign in.',
+      'Open Remote Desktop and connect to assigned UDSTS server.',
+      'If login error, confirm domain is set to UCP.',
+      'Open Outlook and Jabber; verify login and screen share basics.',
+      'Set email signature and confirm "encrypt" works.',
+      'Review email fraud awareness and correct domains.',
+      'Show how to log out of the server.',
+      'Provide IT contact: ithelpdesk@udservices.org or 717-397-1841.',
+    ],
+  },
+  {
+    id: 'KB-137',
+    title: 'AnyConnect VPN and remote desktop setup',
+    category: 'Network',
+    updated: 'Sep 20',
+    views: 291,
+    summary: 'Steps to connect to VPN and log in to the UDS terminal server.',
+    audience: 'All staff',
+    steps: [
+      'Open Cisco AnyConnect and enter vpn.udservices.org.',
+      'Sign in with network credentials.',
+      'Open Remote Desktop and connect to your UDSTS server.',
+      'If login fails, confirm the domain is set to UCP and try again.',
+    ],
+  },
+  {
+    id: 'KB-144',
+    title: 'Call forwarding to cell (Cisco portal)',
+    category: 'Telecom',
+    updated: 'Sep 18',
+    views: 144,
+    summary: 'Forward office calls to a cell phone through the Cisco web portal.',
+    audience: 'IT support',
+    steps: [
+      'From a terminal server session, open http://192.168.32.3/Web/Common/HomePage.do.',
+      'Log in with Cisco credentials provided by IT.',
+      'Click Configure > Phone.',
+      'Select Line 1 and enter 9 + the cell number in the "all" field.',
+      'Click Change to save and close the dialog.',
+      'Log out in the top right corner.',
+    ],
+  },
+  {
+    id: 'KB-151',
+    title: 'Connected Sign: upload images, web, and video',
+    category: 'Digital Signage',
+    updated: 'Sep 14',
+    views: 98,
+    summary: 'Upload media and URLs to the Connected Sign portal.',
+    audience: 'Facilities, IT support',
+    steps: [
+      'Log in to http://cscloud.connectedsign.com/digitalsignage/WebUI/Login#no-back-button.',
+      'For images: Media & Templates > Images, right-click > Add > Media, upload files.',
+      'For videos: Media & Templates > Videos, right-click > Add > Media, upload files.',
+      'For websites: Media & Templates > Web Page, right-click > Add > URL, paste URL and set duration.',
+      'Create or update a playlist and publish the playlist.',
+    ],
+  },
+  {
+    id: 'KB-158',
+    title: 'New printer setup and meter readings',
+    category: 'Printing',
+    updated: 'Sep 10',
+    views: 132,
+    summary: 'Set up network printers and capture copier meter readings.',
+    audience: 'IT support',
+    steps: [
+      'Document make/model/serial in the Hardware Inventory sheet.',
+      'Assign an available IP and record it in inventory.',
+      'Install driver on all company servers and note printer share name.',
+      'Create AD printer group matching the share name.',
+      'Add a matching VBS script in \\\\UDSDC01\\netlogon\\TSPrinters and update TerminalServerLogon.kix.',
+      'Test print from the target location.',
+      'For meter readings, log into printer IPs and capture counters.',
+    ],
+  },
+  {
+    id: 'KB-166',
+    title: 'Barracuda file restore workflow',
+    category: 'Backup',
+    updated: 'Sep 8',
+    views: 119,
+    summary: 'Restore files from Barracuda via UDSFS01.',
+    audience: 'IT support',
+    steps: [
+      'RDP to UDSFS01 and open Internet Explorer.',
+      'Navigate to 192.168.10.36 and log in with Barracuda credentials.',
+      'Open Restore tab and select Restore Browser.',
+      'Browse to UDSFS01 > Backup Agent > File Systems > D: > Company Data.',
+      'Select the file or folder; adjust backup date if needed.',
+      'Restore to original location (preferred) or C:\\ as required.',
+    ],
+  },
+  {
+    id: 'KB-173',
+    title: 'OpenDNS allow/block list updates',
+    category: 'Web Filter',
+    updated: 'Sep 5',
+    views: 87,
+    summary: 'Add domains to allow or block lists in OpenDNS.',
+    audience: 'IT support',
+    steps: [
+      'Log in to https://www.opendns.com/.',
+      'Go to Policies > Destination Lists.',
+      'Select UDS Allow List to whitelist or UDS Black List to block.',
+      'Add the domain and save changes.',
+      'Confirm the policy applies to the correct network.',
+    ],
+  },
+  {
+    id: 'KB-179',
+    title: 'Yarnell door access: add users and fobs',
+    category: 'Access Control',
+    updated: 'Sep 2',
+    views: 73,
+    summary: 'Create door access users for Erin Court or Corporate Blvd.',
+    audience: 'IT support, Facilities',
+    steps: [
+      'Log in at https://www.virtualkeypad.com/systems/162773.',
+      'Switch to the correct system (Erin Court or Corporate Blvd).',
+      'Click Users > Users + to add a user.',
+      'Erin Court: First Name = Fob# - Firstname; Last Name = Lastname; Profile = STAFF.',
+      'Corporate Blvd: First Name = Lastname, Firstname; Last Name = 7-digit fob code.',
+      'Type should be Code; enter the 5-digit fob code.',
+      'Save and document access details in the UP Spreadsheet.',
+    ],
+  },
 ];
 
 const problemRecords = [
@@ -824,6 +1050,10 @@ function AppIT() {
   const [cannedDraft, setCannedDraft] = useState({ title: '', body: '' });
   const [selectedCannedId, setSelectedCannedId] = useState('');
   const [pendingCannedBody, setPendingCannedBody] = useState('');
+  const [knowledgeArticles, setKnowledgeArticles] = useState(() => knowledgeArticlesSeed);
+  const [selectedKnowledgeId, setSelectedKnowledgeId] = useState('');
+  const [isEditingKnowledge, setIsEditingKnowledge] = useState(false);
+  const [knowledgeDraft, setKnowledgeDraft] = useState(null);
   const [automationError, setAutomationError] = useState('');
   const [cannedError, setCannedError] = useState('');
   const [theme, setTheme] = useState('light');
@@ -893,6 +1123,8 @@ function AppIT() {
     ? employeeLookup.get(activeTicket.requesterEmail.toLowerCase())
     : null;
   const requesterAssets = requesterRecord ? buildAssetList(requesterRecord) : [];
+  const activeKnowledge =
+    knowledgeArticles.find((article) => article.id === selectedKnowledgeId) || knowledgeArticles[0] || null;
 
   const ticketQuery = useMemo(() => {
     const query = {
@@ -1273,6 +1505,50 @@ function AppIT() {
 
   const handleNavigate = (targetId) => {
     setActiveSection(targetId);
+  };
+
+  const handleOpenKnowledge = (articleId) => {
+    setSelectedKnowledgeId(articleId);
+    setIsEditingKnowledge(false);
+    setKnowledgeDraft(null);
+    setActiveSection('knowledge-detail');
+  };
+
+  const handleEditKnowledge = () => {
+    if (!activeKnowledge) return;
+    setKnowledgeDraft({
+      ...activeKnowledge,
+      steps: [...(activeKnowledge.steps || [])],
+      notes: [...(activeKnowledge.notes || [])],
+    });
+    setIsEditingKnowledge(true);
+  };
+
+  const handleCancelKnowledgeEdit = () => {
+    setIsEditingKnowledge(false);
+    setKnowledgeDraft(null);
+  };
+
+  const handleSaveKnowledge = () => {
+    if (!knowledgeDraft) return;
+    setKnowledgeArticles((prev) => prev.map((article) => (article.id === knowledgeDraft.id ? knowledgeDraft : article)));
+    setIsEditingKnowledge(false);
+    setKnowledgeDraft(null);
+  };
+
+  const updateKnowledgeDraft = (field, value) => {
+    setKnowledgeDraft((prev) => (prev ? { ...prev, [field]: value } : prev));
+  };
+
+  const updateKnowledgeList = (field, value) => {
+    setKnowledgeDraft((prev) => {
+      if (!prev) return prev;
+      const nextItems = value
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+      return { ...prev, [field]: nextItems };
+    });
   };
 
   const openTicketCount = tickets.filter((item) => !['Resolved', 'Closed'].includes(item.status)).length;
@@ -1690,12 +1966,167 @@ function AppIT() {
                           Updated {article.updated} - {article.views} views
                         </p>
                       </div>
-                      <button className="btn btn-ghost btn-small" type="button">
+                      <button className="btn btn-ghost btn-small" type="button" onClick={() => handleOpenKnowledge(article.id)}>
                         View
                       </button>
                     </div>
                   ))}
                 </div>
+              </section>
+            )}
+
+            {activeSection === 'knowledge-detail' && (
+              <section className="card">
+                <div className="ticket-detail-hero">
+                  <div>
+                    <button className="btn btn-ghost btn-small" type="button" onClick={() => handleNavigate('knowledge')}>
+                      Back to knowledge base
+                    </button>
+                    <div className="section-title">Knowledge Base</div>
+                    <h2 className="section-heading">
+                      {isEditingKnowledge ? knowledgeDraft?.title || 'Knowledge article' : activeKnowledge?.title || 'Knowledge article'}
+                    </h2>
+                    <p className="section-sub">
+                      {isEditingKnowledge
+                        ? knowledgeDraft?.summary || 'Detailed guidance for this topic.'
+                        : activeKnowledge?.summary || 'Detailed guidance for this topic.'}
+                    </p>
+                  </div>
+                  {activeKnowledge && (
+                    <div className="ticket-detail-hero-meta">
+                      <InlineTag>{activeKnowledge.category}</InlineTag>
+                      <InlineTag className="mono">{activeKnowledge.id}</InlineTag>
+                    </div>
+                  )}
+                </div>
+
+                {activeKnowledge ? (
+                  <div className="ticket-detail">
+                    <div className="ticket-actions">
+                      {!isEditingKnowledge ? (
+                        <button className="btn btn-ghost btn-small" type="button" onClick={handleEditKnowledge}>
+                          Edit article
+                        </button>
+                      ) : (
+                        <>
+                          <button className="btn btn-primary btn-small" type="button" onClick={handleSaveKnowledge}>
+                            Save changes
+                          </button>
+                          <button className="btn btn-ghost btn-small" type="button" onClick={handleCancelKnowledgeEdit}>
+                            Cancel
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="ticket-detail-grid">
+                      <div className="detail-card">
+                        <div className="detail-label">Audience</div>
+                        {isEditingKnowledge ? (
+                          <input
+                            className="input"
+                            value={knowledgeDraft?.audience || ''}
+                            onChange={(event) => updateKnowledgeDraft('audience', event.target.value)}
+                            placeholder="e.g. IT support, Facilities"
+                          />
+                        ) : (
+                          <div className="detail-value">{activeKnowledge.audience || 'All staff'}</div>
+                        )}
+                        <div className="detail-label">Last updated</div>
+                        {isEditingKnowledge ? (
+                          <input
+                            className="input"
+                            value={knowledgeDraft?.updated || ''}
+                            onChange={(event) => updateKnowledgeDraft('updated', event.target.value)}
+                            placeholder="e.g. Oct 12"
+                          />
+                        ) : (
+                          <div className="detail-value">{activeKnowledge.updated}</div>
+                        )}
+                      </div>
+                      <div className="detail-card">
+                        <div className="detail-label">Views</div>
+                        {isEditingKnowledge ? (
+                          <input
+                            className="input"
+                            value={knowledgeDraft?.views ?? ''}
+                            onChange={(event) => updateKnowledgeDraft('views', Number(event.target.value || 0))}
+                            placeholder="0"
+                            type="number"
+                          />
+                        ) : (
+                          <div className="detail-value">{activeKnowledge.views}</div>
+                        )}
+                        <div className="detail-label">Category</div>
+                        {isEditingKnowledge ? (
+                          <input
+                            className="input"
+                            value={knowledgeDraft?.category || ''}
+                            onChange={(event) => updateKnowledgeDraft('category', event.target.value)}
+                            placeholder="e.g. Network"
+                          />
+                        ) : (
+                          <div className="detail-value">{activeKnowledge.category}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="detail-card">
+                      <div className="detail-label">Summary</div>
+                      {isEditingKnowledge ? (
+                        <textarea
+                          className="textarea"
+                          value={knowledgeDraft?.summary || ''}
+                          onChange={(event) => updateKnowledgeDraft('summary', event.target.value)}
+                          placeholder="Short summary"
+                        />
+                      ) : (
+                        <p className="work-meta">{activeKnowledge.summary}</p>
+                      )}
+                    </div>
+
+                    <div className="detail-card">
+                      <div className="detail-label">Steps</div>
+                      {isEditingKnowledge ? (
+                        <textarea
+                          className="textarea"
+                          value={(knowledgeDraft?.steps || []).join('\n')}
+                          onChange={(event) => updateKnowledgeList('steps', event.target.value)}
+                          placeholder="One step per line"
+                        />
+                      ) : (
+                        <ol className="escalation-list kb-list">
+                          {(activeKnowledge.steps || []).map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+
+                    {(isEditingKnowledge || (activeKnowledge.notes && activeKnowledge.notes.length > 0)) && (
+                      <div className="detail-card">
+                        <div className="detail-label">Notes</div>
+                        {isEditingKnowledge ? (
+                          <textarea
+                            className="textarea"
+                            value={(knowledgeDraft?.notes || []).join('\n')}
+                            onChange={(event) => updateKnowledgeList('notes', event.target.value)}
+                            placeholder="One note per line"
+                          />
+                        ) : (
+                          <ul className="escalation-list kb-list">
+                            {activeKnowledge.notes.map((note) => (
+                              <li key={note}>{note}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>Select an article to view details.</p>
+                  </div>
+                )}
               </section>
             )}
 
