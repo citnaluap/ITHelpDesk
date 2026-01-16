@@ -104,3 +104,58 @@ export const sendTicketMessage = async (payload) =>
     method: 'POST',
     body: JSON.stringify(payload),
   });
+
+export const fetchProjects = async () => {
+  const data = await request('/api/projects');
+  return data.projects || [];
+};
+
+export const createProject = async (project) =>
+  request('/api/projects', {
+    method: 'POST',
+    body: JSON.stringify({ project }),
+  });
+
+export const fetchChanges = async () => {
+  const data = await request('/api/changes');
+  return data.changes || [];
+};
+
+export const createChange = async (change) =>
+  request('/api/changes', {
+    method: 'POST',
+    body: JSON.stringify({ change }),
+  });
+
+export const fetchProblems = async () => {
+  const data = await request('/api/problems');
+  return data.problems || [];
+};
+
+export const createProblem = async (problem) =>
+  request('/api/problems', {
+    method: 'POST',
+    body: JSON.stringify({ problem }),
+  });
+
+export const fetchReleases = async () => {
+  const data = await request('/api/releases');
+  return data.releases || [];
+};
+
+export const createRelease = async (release) =>
+  request('/api/releases', {
+    method: 'POST',
+    body: JSON.stringify({ release }),
+  });
+
+export const fetchCatalogItems = async () => {
+  const data = await request('/api/service-catalog');
+  return data.items || [];
+};
+
+export const createCatalogItem = async (item) =>
+  request('/api/service-catalog', {
+    method: 'POST',
+    body: JSON.stringify({ item }),
+  });

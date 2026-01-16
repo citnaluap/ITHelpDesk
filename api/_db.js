@@ -42,4 +42,34 @@ export const ensureTables = async () => {
       data jsonb NOT NULL
     );
   `;
+  await db`
+    CREATE TABLE IF NOT EXISTS projects (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS change_events (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS problems (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS releases (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS service_catalog (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
 };

@@ -30,10 +30,20 @@ import employeeDirectory from './data/employeeDirectory.json';
 import {
   createAutomationRule,
   createCannedResponse,
+  createCatalogItem,
+  createChange,
+  createProblem,
+  createProject,
+  createRelease,
   createTicket,
   fetchApprovals,
   fetchAutomationRules,
   fetchCannedResponses,
+  fetchCatalogItems,
+  fetchChanges,
+  fetchProblems,
+  fetchProjects,
+  fetchReleases,
   fetchTickets,
   sendTicketMessage,
   updateApproval,
@@ -200,6 +210,7 @@ const changeCalendar = [
     status: 'Planned',
   },
 ];
+const CHANGE_STATUS_OPTIONS = ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Canceled'];
 
 const reportRanges = ['Last 7 days', 'Last 30 days', 'Quarter to date'];
 
@@ -674,18 +685,21 @@ const problemRecords = [
   { id: 'PRB-22', title: 'Email delays with vendor relay', status: 'Known error', impact: 'Org-wide', linked: 3 },
   { id: 'PRB-25', title: 'Print server spooler crash', status: 'Workaround', impact: 'Single site', linked: 4 },
 ];
+const PROBLEM_STATUS_OPTIONS = ['Investigation', 'Root cause analysis', 'Known error', 'Workaround', 'Resolved'];
 
 const releaseRecords = [
   { id: 'REL-12', title: 'Q4 Windows patch bundle', status: 'Scheduled', window: 'Oct 10', owner: 'Change Mgmt' },
   { id: 'REL-13', title: 'Teams client feature update', status: 'In Progress', window: 'Sep 28', owner: 'Unified Comms' },
   { id: 'REL-14', title: 'Firewall policy baseline', status: 'Planned', window: 'Nov 2', owner: 'Security' },
 ];
+const RELEASE_STATUS_OPTIONS = ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Canceled'];
 
 const projectRecords = [
   { id: 'PRJ-8', title: 'Remote worker hardening', status: 'On track', owner: 'Erik Lofgren', progress: 62 },
   { id: 'PRJ-11', title: 'Asset lifecycle refresh', status: 'At risk', owner: 'Paul Antic', progress: 38 },
   { id: 'PRJ-14', title: 'Service catalog expansion', status: 'On track', owner: 'Geoffrey Heller', progress: 71 },
 ];
+const PROJECT_STATUS_OPTIONS = ['Planned', 'On track', 'At risk', 'In Progress', 'Blocked', 'Completed'];
 
 const assetInventory = [
   { id: 'AST-1102', name: 'Dell Latitude 7420', user: 'Prem Acharya', status: 'In use', location: 'HQ' },
@@ -1043,8 +1057,26 @@ function AppIT() {
   const [reportRange, setReportRange] = useState(reportRanges[0]);
   const [automationRules, setAutomationRules] = useState([]);
   const [catalogActiveId, setCatalogActiveId] = useState('');
+  const [catalogItems, setCatalogItems] = useState(() => serviceCatalog);
+  const [catalogItemDraft, setCatalogItemDraft] = useState({
+    name: '',
+    type: '',
+    eta: '',
+    approval: '',
+  });
+  const [catalogItemError, setCatalogItemError] = useState('');
+  const [showCatalogForm, setShowCatalogForm] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [catalogSubmitting, setCatalogSubmitting] = useState(false);
+  const [changeEvents, setChangeEvents] = useState(() => changeCalendar);
+  const [changeDraft, setChangeDraft] = useState({
+    area: '',
+    title: '',
+    window: '',
+    status: 'Planned',
+  });
+  const [changeError, setChangeError] = useState('');
+  const [showChangeForm, setShowChangeForm] = useState(false);
   const [catalogDraft, setCatalogDraft] = useState({
     employeeName: '',
     employeeEmail: '',
@@ -1089,6 +1121,33 @@ function AppIT() {
   const [knowledgeDraft, setKnowledgeDraft] = useState(null);
   const [automationError, setAutomationError] = useState('');
   const [cannedError, setCannedError] = useState('');
+  const [projects, setProjects] = useState(() => projectRecords);
+  const [projectDraft, setProjectDraft] = useState({
+    title: '',
+    owner: '',
+    status: 'Planned',
+    progress: '',
+  });
+  const [projectError, setProjectError] = useState('');
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [problems, setProblems] = useState(() => problemRecords);
+  const [problemDraft, setProblemDraft] = useState({
+    title: '',
+    status: 'Investigation',
+    impact: '',
+    linked: '',
+  });
+  const [problemError, setProblemError] = useState('');
+  const [showProblemForm, setShowProblemForm] = useState(false);
+  const [releases, setReleases] = useState(() => releaseRecords);
+  const [releaseDraft, setReleaseDraft] = useState({
+    title: '',
+    owner: '',
+    window: '',
+    status: 'Planned',
+  });
+  const [releaseError, setReleaseError] = useState('');
+  const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [theme, setTheme] = useState('light');
   const [authEmail, setAuthEmail] = useState('');
   const [authError, setAuthError] = useState('');
@@ -1158,6 +1217,7 @@ function AppIT() {
   const requesterAssets = requesterRecord ? buildAssetList(requesterRecord) : [];
   const activeKnowledge =
     knowledgeArticles.find((article) => article.id === selectedKnowledgeId) || knowledgeArticles[0] || null;
+  const knowledgeView = isEditingKnowledge && knowledgeDraft ? knowledgeDraft : activeKnowledge;
 
   const ticketQuery = useMemo(() => {
     const query = {
@@ -1268,6 +1328,34 @@ function AppIT() {
       }
     };
     loadCanned();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadReferenceData = async () => {
+      try {
+        const [catalog, projectsList, changesList, problemsList, releasesList] = await Promise.all([
+          fetchCatalogItems(),
+          fetchProjects(),
+          fetchChanges(),
+          fetchProblems(),
+          fetchReleases(),
+        ]);
+        if (!isActive) return;
+        if (catalog.length) setCatalogItems(catalog);
+        if (projectsList.length) setProjects(projectsList);
+        if (changesList.length) setChangeEvents(changesList);
+        if (problemsList.length) setProblems(problemsList);
+        if (releasesList.length) setReleases(releasesList);
+      } catch (error) {
+        if (!isActive) return;
+        console.error('Failed to load reference data', error);
+      }
+    };
+    loadReferenceData();
     return () => {
       isActive = false;
     };
@@ -1531,9 +1619,158 @@ function AppIT() {
     ]);
   };
 
+  const handleAddProject = async () => {
+    const title = projectDraft.title.trim();
+    const owner = projectDraft.owner.trim();
+    const progressValue = projectDraft.progress === '' ? 0 : Number(projectDraft.progress);
+    if (!title || !owner) {
+      setProjectError('Project title and owner are required.');
+      return;
+    }
+    if (Number.isNaN(progressValue) || progressValue < 0 || progressValue > 100) {
+      setProjectError('Progress must be a number between 0 and 100.');
+      return;
+    }
+    setProjectError('');
+    const newProject = {
+      id: createId('PRJ'),
+      title,
+      status: projectDraft.status,
+      owner,
+      progress: Math.round(progressValue),
+    };
+    try {
+      const response = await createProject(newProject);
+      const saved = response.project || newProject;
+      setProjects((prev) => [saved, ...prev]);
+      setProjectDraft({ title: '', owner: '', status: 'Planned', progress: '' });
+      setShowProjectForm(false);
+    } catch (error) {
+      console.error('Failed to create project', error);
+      setProjectError('Unable to save the project.');
+    }
+  };
+
+  const handleAddProblem = async () => {
+    const title = problemDraft.title.trim();
+    const impact = problemDraft.impact.trim();
+    const linkedValue = problemDraft.linked === '' ? 0 : Number(problemDraft.linked);
+    if (!title || !impact) {
+      setProblemError('Problem title and impact are required.');
+      return;
+    }
+    if (Number.isNaN(linkedValue) || linkedValue < 0) {
+      setProblemError('Linked incidents must be a valid number.');
+      return;
+    }
+    setProblemError('');
+    const newProblem = {
+      id: createId('PRB'),
+      title,
+      status: problemDraft.status,
+      impact,
+      linked: Math.round(linkedValue),
+    };
+    try {
+      const response = await createProblem(newProblem);
+      const saved = response.problem || newProblem;
+      setProblems((prev) => [saved, ...prev]);
+      setProblemDraft({ title: '', status: 'Investigation', impact: '', linked: '' });
+      setShowProblemForm(false);
+    } catch (error) {
+      console.error('Failed to create problem', error);
+      setProblemError('Unable to save the problem.');
+    }
+  };
+
+  const handleAddChangeEvent = async () => {
+    const area = changeDraft.area.trim();
+    const title = changeDraft.title.trim();
+    const window = changeDraft.window.trim();
+    if (!area || !title || !window) {
+      setChangeError('Area, title, and window are required.');
+      return;
+    }
+    setChangeError('');
+    const newEvent = {
+      id: createId('CHG'),
+      area,
+      title,
+      window,
+      status: changeDraft.status,
+    };
+    try {
+      const response = await createChange(newEvent);
+      const saved = response.change || newEvent;
+      setChangeEvents((prev) => [saved, ...prev]);
+      setChangeDraft({ area: '', title: '', window: '', status: 'Planned' });
+      setShowChangeForm(false);
+    } catch (error) {
+      console.error('Failed to create change event', error);
+      setChangeError('Unable to save the change event.');
+    }
+  };
+
   const handleOpenCatalog = (id) => {
     setCatalogActiveId(id);
     setCatalogError('');
+  };
+
+  const handleAddCatalogItem = async () => {
+    const name = catalogItemDraft.name.trim();
+    const type = catalogItemDraft.type.trim();
+    const eta = catalogItemDraft.eta.trim();
+    const approval = catalogItemDraft.approval.trim();
+    if (!name || !type || !eta) {
+      setCatalogItemError('Name, type, and ETA are required.');
+      return;
+    }
+    setCatalogItemError('');
+    const newItem = {
+      id: createId('CAT'),
+      name,
+      type,
+      eta,
+      approval: approval || 'Approval pending',
+    };
+    try {
+      const response = await createCatalogItem(newItem);
+      const saved = response.item || newItem;
+      setCatalogItems((prev) => [saved, ...prev]);
+      setCatalogItemDraft({ name: '', type: '', eta: '', approval: '' });
+      setShowCatalogForm(false);
+    } catch (error) {
+      console.error('Failed to create catalog item', error);
+      setCatalogItemError('Unable to save the catalog item.');
+    }
+  };
+
+  const handleAddRelease = async () => {
+    const title = releaseDraft.title.trim();
+    const owner = releaseDraft.owner.trim();
+    const window = releaseDraft.window.trim();
+    if (!title || !owner || !window) {
+      setReleaseError('Title, owner, and window are required.');
+      return;
+    }
+    setReleaseError('');
+    const newRelease = {
+      id: createId('REL'),
+      title,
+      status: releaseDraft.status,
+      window,
+      owner,
+    };
+    try {
+      const response = await createRelease(newRelease);
+      const saved = response.release || newRelease;
+      setReleases((prev) => [saved, ...prev]);
+      setReleaseDraft({ title: '', owner: '', window: '', status: 'Planned' });
+      setShowReleaseForm(false);
+    } catch (error) {
+      console.error('Failed to create release', error);
+      setReleaseError('Unable to save the release.');
+    }
   };
 
   const handleCatalogSubmit = async (event) => {
@@ -1767,14 +2004,48 @@ function AppIT() {
 
   const handleCancelKnowledgeEdit = () => {
     setIsEditingKnowledge(false);
+    if (knowledgeDraft?.isNew) {
+      setSelectedKnowledgeId('');
+      setActiveSection('knowledge');
+    }
     setKnowledgeDraft(null);
   };
 
   const handleSaveKnowledge = () => {
     if (!knowledgeDraft) return;
-    setKnowledgeArticles((prev) => prev.map((article) => (article.id === knowledgeDraft.id ? knowledgeDraft : article)));
+    const { isNew, ...nextArticle } = knowledgeDraft;
+    setKnowledgeArticles((prev) => {
+      const exists = prev.some((article) => article.id === nextArticle.id);
+      if (exists) {
+        return prev.map((article) => (article.id === nextArticle.id ? nextArticle : article));
+      }
+      return [nextArticle, ...prev];
+    });
     setIsEditingKnowledge(false);
+    setSelectedKnowledgeId(knowledgeDraft.id);
     setKnowledgeDraft(null);
+  };
+
+  const formatShortDate = () =>
+    new Date().toLocaleString('en-US', { month: 'short', day: 'numeric' });
+
+  const handleAddKnowledge = () => {
+    const newId = createId('KB');
+    setSelectedKnowledgeId(newId);
+    setKnowledgeDraft({
+      id: newId,
+      title: '',
+      category: 'General',
+      updated: formatShortDate(),
+      views: 0,
+      summary: '',
+      audience: 'All staff',
+      steps: [],
+      notes: [],
+      isNew: true,
+    });
+    setIsEditingKnowledge(true);
+    setActiveSection('knowledge-detail');
   };
 
   const updateKnowledgeDraft = (field, value) => {
@@ -2170,8 +2441,13 @@ function AppIT() {
                 <div className="section-title">Service Catalog</div>
                 <h2 className="section-heading">Standard requests and workflows</h2>
                 <p className="section-sub">Launch new requests from predefined service offerings.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowCatalogForm(true)}>
+                    Add request
+                  </button>
+                </div>
                 <div className="module-grid">
-                  {serviceCatalog.map((item) => (
+                  {catalogItems.map((item) => (
                     <div key={item.id} className="module-card">
                       <div className="list-inline">
                         <InlineTag>{item.type}</InlineTag>
@@ -2186,6 +2462,62 @@ function AppIT() {
                     </div>
                   ))}
                 </div>
+                {showCatalogForm && (
+                  <>
+                    {catalogItemError && (
+                      <div className="form-alert error">
+                        <div className="form-alert-message">{catalogItemError}</div>
+                      </div>
+                    )}
+                    <div className="detail-card">
+                      <div className="detail-label">Add service request</div>
+                      <label className="label">
+                        Name
+                        <input
+                          className="input"
+                          value={catalogItemDraft.name}
+                          onChange={(event) => setCatalogItemDraft((prev) => ({ ...prev, name: event.target.value }))}
+                          placeholder="e.g. MFA reset"
+                        />
+                      </label>
+                      <label className="label">
+                        Type
+                        <input
+                          className="input"
+                          value={catalogItemDraft.type}
+                          onChange={(event) => setCatalogItemDraft((prev) => ({ ...prev, type: event.target.value }))}
+                          placeholder="e.g. Access"
+                        />
+                      </label>
+                      <label className="label">
+                        ETA
+                        <input
+                          className="input"
+                          value={catalogItemDraft.eta}
+                          onChange={(event) => setCatalogItemDraft((prev) => ({ ...prev, eta: event.target.value }))}
+                          placeholder="e.g. 1 day"
+                        />
+                      </label>
+                      <label className="label">
+                        Approval
+                        <input
+                          className="input"
+                          value={catalogItemDraft.approval}
+                          onChange={(event) => setCatalogItemDraft((prev) => ({ ...prev, approval: event.target.value }))}
+                          placeholder="e.g. Manager approval"
+                        />
+                      </label>
+                      <div className="list-inline">
+                        <button className="btn btn-primary btn-small" type="button" onClick={handleAddCatalogItem}>
+                          Add request
+                        </button>
+                        <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowCatalogForm(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
                 {catalogActiveId === 'CAT-101' && (
                   <form className="detail-card" onSubmit={handleCatalogSubmit}>
                     <div className="detail-label">New employee onboarding intake</div>
@@ -2566,6 +2898,11 @@ function AppIT() {
                 <div className="section-title">Knowledge Base</div>
                 <h2 className="section-heading">Articles and troubleshooting guides</h2>
                 <p className="section-sub">Curated answers for common issues and workflows.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-primary btn-small" type="button" onClick={handleAddKnowledge}>
+                    Add article
+                  </button>
+                </div>
                 <div className="record-list">
                   {knowledgeArticles.map((article) => (
                     <div key={article.id} className="record-row">
@@ -2597,23 +2934,23 @@ function AppIT() {
                     </button>
                     <div className="section-title">Knowledge Base</div>
                     <h2 className="section-heading">
-                      {isEditingKnowledge ? knowledgeDraft?.title || 'Knowledge article' : activeKnowledge?.title || 'Knowledge article'}
+                      {isEditingKnowledge ? knowledgeDraft?.title || 'Knowledge article' : knowledgeView?.title || 'Knowledge article'}
                     </h2>
                     <p className="section-sub">
                       {isEditingKnowledge
                         ? knowledgeDraft?.summary || 'Detailed guidance for this topic.'
-                        : activeKnowledge?.summary || 'Detailed guidance for this topic.'}
+                        : knowledgeView?.summary || 'Detailed guidance for this topic.'}
                     </p>
                   </div>
-                  {activeKnowledge && (
+                  {knowledgeView && (
                     <div className="ticket-detail-hero-meta">
-                      <InlineTag>{activeKnowledge.category}</InlineTag>
-                      <InlineTag className="mono">{activeKnowledge.id}</InlineTag>
+                      <InlineTag>{knowledgeView.category}</InlineTag>
+                      <InlineTag className="mono">{knowledgeView.id}</InlineTag>
                     </div>
                   )}
                 </div>
 
-                {activeKnowledge ? (
+                {knowledgeView ? (
                   <div className="ticket-detail">
                     <div className="ticket-actions">
                       {!isEditingKnowledge ? (
@@ -2642,7 +2979,7 @@ function AppIT() {
                             placeholder="e.g. IT support, Facilities"
                           />
                         ) : (
-                          <div className="detail-value">{activeKnowledge.audience || 'All staff'}</div>
+                          <div className="detail-value">{knowledgeView.audience || 'All staff'}</div>
                         )}
                         <div className="detail-label">Last updated</div>
                         {isEditingKnowledge ? (
@@ -2653,7 +2990,7 @@ function AppIT() {
                             placeholder="e.g. Oct 12"
                           />
                         ) : (
-                          <div className="detail-value">{activeKnowledge.updated}</div>
+                          <div className="detail-value">{knowledgeView.updated}</div>
                         )}
                       </div>
                       <div className="detail-card">
@@ -2667,7 +3004,7 @@ function AppIT() {
                             type="number"
                           />
                         ) : (
-                          <div className="detail-value">{activeKnowledge.views}</div>
+                          <div className="detail-value">{knowledgeView.views}</div>
                         )}
                         <div className="detail-label">Category</div>
                         {isEditingKnowledge ? (
@@ -2678,7 +3015,7 @@ function AppIT() {
                             placeholder="e.g. Network"
                           />
                         ) : (
-                          <div className="detail-value">{activeKnowledge.category}</div>
+                          <div className="detail-value">{knowledgeView.category}</div>
                         )}
                       </div>
                     </div>
@@ -2693,7 +3030,7 @@ function AppIT() {
                           placeholder="Short summary"
                         />
                       ) : (
-                        <p className="work-meta">{activeKnowledge.summary}</p>
+                        <p className="work-meta">{knowledgeView.summary}</p>
                       )}
                     </div>
 
@@ -2708,14 +3045,14 @@ function AppIT() {
                         />
                       ) : (
                         <ol className="escalation-list kb-list">
-                          {(activeKnowledge.steps || []).map((step) => (
+                          {(knowledgeView.steps || []).map((step) => (
                             <li key={step}>{step}</li>
                           ))}
                         </ol>
                       )}
                     </div>
 
-                    {(isEditingKnowledge || (activeKnowledge.notes && activeKnowledge.notes.length > 0)) && (
+                    {(isEditingKnowledge || (knowledgeView.notes && knowledgeView.notes.length > 0)) && (
                       <div className="detail-card">
                         <div className="detail-label">Notes</div>
                         {isEditingKnowledge ? (
@@ -2727,7 +3064,7 @@ function AppIT() {
                           />
                         ) : (
                           <ul className="escalation-list kb-list">
-                            {activeKnowledge.notes.map((note) => (
+                            {knowledgeView.notes.map((note) => (
                               <li key={note}>{note}</li>
                             ))}
                           </ul>
@@ -2748,8 +3085,13 @@ function AppIT() {
                 <div className="section-title">Problems</div>
                 <h2 className="section-heading">Root cause and known errors</h2>
                 <p className="section-sub">Track recurring incidents and permanent fixes.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowProblemForm(true)}>
+                    Add problem
+                  </button>
+                </div>
                 <div className="record-list">
-                  {problemRecords.map((problem) => (
+                  {problems.map((problem) => (
                     <div key={problem.id} className="record-row">
                       <div>
                         <div className="list-inline">
@@ -2767,6 +3109,67 @@ function AppIT() {
                     </div>
                   ))}
                 </div>
+                {showProblemForm && (
+                  <>
+                    {problemError && (
+                      <div className="form-alert error">
+                        <div className="form-alert-message">{problemError}</div>
+                      </div>
+                    )}
+                    <div className="detail-card">
+                      <div className="detail-label">Add problem</div>
+                      <label className="label">
+                        Title
+                        <input
+                          className="input"
+                          value={problemDraft.title}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, title: event.target.value }))}
+                          placeholder="e.g. VPN drops every 20 minutes"
+                        />
+                      </label>
+                      <label className="label">
+                        Impact
+                        <input
+                          className="input"
+                          value={problemDraft.impact}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, impact: event.target.value }))}
+                          placeholder="e.g. Multiple teams"
+                        />
+                      </label>
+                      <label className="label">
+                        Status
+                        <select
+                          className="control-select"
+                          value={problemDraft.status}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, status: event.target.value }))}
+                        >
+                          {PROBLEM_STATUS_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="label">
+                        Linked incidents
+                        <input
+                          className="input"
+                          value={problemDraft.linked}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, linked: event.target.value }))}
+                          placeholder="e.g. 3"
+                        />
+                      </label>
+                      <div className="list-inline">
+                        <button className="btn btn-primary btn-small" type="button" onClick={handleAddProblem}>
+                          Add problem
+                        </button>
+                        <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowProblemForm(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
@@ -3012,11 +3415,77 @@ function AppIT() {
               <section className="card">
                 <div className="section-title">Change calendar</div>
                 <p className="section-sub">Stay ahead of upcoming maintenance windows.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowChangeForm(true)}>
+                    Add event
+                  </button>
+                </div>
                 <div className="change-list">
-                  {changeCalendar.map((item) => (
+                  {changeEvents.map((item) => (
                     <ChangeRow key={item.id} item={item} />
                   ))}
                 </div>
+                {showChangeForm && (
+                  <>
+                    {changeError && (
+                      <div className="form-alert error">
+                        <div className="form-alert-message">{changeError}</div>
+                      </div>
+                    )}
+                    <div className="detail-card">
+                      <div className="detail-label">Add change event</div>
+                      <label className="label">
+                        Area
+                        <input
+                          className="input"
+                          value={changeDraft.area}
+                          onChange={(event) => setChangeDraft((prev) => ({ ...prev, area: event.target.value }))}
+                          placeholder="e.g. Network"
+                        />
+                      </label>
+                      <label className="label">
+                        Title
+                        <input
+                          className="input"
+                          value={changeDraft.title}
+                          onChange={(event) => setChangeDraft((prev) => ({ ...prev, title: event.target.value }))}
+                          placeholder="e.g. VPN gateway upgrade"
+                        />
+                      </label>
+                      <label className="label">
+                        Window
+                        <input
+                          className="input"
+                          value={changeDraft.window}
+                          onChange={(event) => setChangeDraft((prev) => ({ ...prev, window: event.target.value }))}
+                          placeholder="e.g. Fri 9:00p - 11:00p"
+                        />
+                      </label>
+                      <label className="label">
+                        Status
+                        <select
+                          className="control-select"
+                          value={changeDraft.status}
+                          onChange={(event) => setChangeDraft((prev) => ({ ...prev, status: event.target.value }))}
+                        >
+                          {CHANGE_STATUS_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="list-inline">
+                        <button className="btn btn-primary btn-small" type="button" onClick={handleAddChangeEvent}>
+                          Add event
+                        </button>
+                        <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowChangeForm(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
@@ -3025,8 +3494,13 @@ function AppIT() {
                 <div className="section-title">Releases</div>
                 <h2 className="section-heading">Planned rollouts and upgrades</h2>
                 <p className="section-sub">Coordinate releases with change windows.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowReleaseForm(true)}>
+                    Add release
+                  </button>
+                </div>
                 <div className="record-list">
-                  {releaseRecords.map((release) => (
+                  {releases.map((release) => (
                     <div key={release.id} className="record-row">
                       <div>
                         <div className="list-inline">
@@ -3044,6 +3518,67 @@ function AppIT() {
                     </div>
                   ))}
                 </div>
+                {showReleaseForm && (
+                  <>
+                    {releaseError && (
+                      <div className="form-alert error">
+                        <div className="form-alert-message">{releaseError}</div>
+                      </div>
+                    )}
+                    <div className="detail-card">
+                      <div className="detail-label">Add release</div>
+                      <label className="label">
+                        Title
+                        <input
+                          className="input"
+                          value={releaseDraft.title}
+                          onChange={(event) => setReleaseDraft((prev) => ({ ...prev, title: event.target.value }))}
+                          placeholder="e.g. Teams client feature update"
+                        />
+                      </label>
+                      <label className="label">
+                        Owner
+                        <input
+                          className="input"
+                          value={releaseDraft.owner}
+                          onChange={(event) => setReleaseDraft((prev) => ({ ...prev, owner: event.target.value }))}
+                          placeholder="e.g. Unified Comms"
+                        />
+                      </label>
+                      <label className="label">
+                        Window
+                        <input
+                          className="input"
+                          value={releaseDraft.window}
+                          onChange={(event) => setReleaseDraft((prev) => ({ ...prev, window: event.target.value }))}
+                          placeholder="e.g. Oct 10"
+                        />
+                      </label>
+                      <label className="label">
+                        Status
+                        <select
+                          className="control-select"
+                          value={releaseDraft.status}
+                          onChange={(event) => setReleaseDraft((prev) => ({ ...prev, status: event.target.value }))}
+                        >
+                          {RELEASE_STATUS_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="list-inline">
+                        <button className="btn btn-primary btn-small" type="button" onClick={handleAddRelease}>
+                          Add release
+                        </button>
+                        <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowReleaseForm(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
@@ -3052,8 +3587,18 @@ function AppIT() {
                 <div className="section-title">Projects</div>
                 <h2 className="section-heading">Cross-team initiatives</h2>
                 <p className="section-sub">Track progress, owners, and delivery risk.</p>
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowProjectForm(true)}>
+                    Add project
+                  </button>
+                </div>
+                {projectError && (
+                  <div className="form-alert error">
+                    <div className="form-alert-message">{projectError}</div>
+                  </div>
+                )}
                 <div className="record-list">
-                  {projectRecords.map((project) => (
+                  {projects.map((project) => (
                     <div key={project.id} className="record-row">
                       <div className="project-meta">
                         <div className="list-inline">
@@ -3073,6 +3618,60 @@ function AppIT() {
                     </div>
                   ))}
                 </div>
+                {showProjectForm && (
+                  <div className="detail-card">
+                    <div className="detail-label">Create project</div>
+                    <label className="label">
+                      Project title
+                      <input
+                        className="input"
+                        value={projectDraft.title}
+                        onChange={(event) => setProjectDraft((prev) => ({ ...prev, title: event.target.value }))}
+                        placeholder="e.g. Office 365 rollout"
+                      />
+                    </label>
+                    <label className="label">
+                      Owner
+                      <input
+                        className="input"
+                        value={projectDraft.owner}
+                        onChange={(event) => setProjectDraft((prev) => ({ ...prev, owner: event.target.value }))}
+                        placeholder="e.g. Paul Antic"
+                      />
+                    </label>
+                    <label className="label">
+                      Status
+                      <select
+                        className="control-select"
+                        value={projectDraft.status}
+                        onChange={(event) => setProjectDraft((prev) => ({ ...prev, status: event.target.value }))}
+                      >
+                        {PROJECT_STATUS_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="label">
+                      Progress (%)
+                      <input
+                        className="input"
+                        value={projectDraft.progress}
+                        onChange={(event) => setProjectDraft((prev) => ({ ...prev, progress: event.target.value }))}
+                        placeholder="e.g. 45"
+                      />
+                    </label>
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="button" onClick={handleAddProject}>
+                        Add project
+                      </button>
+                      <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowProjectForm(false)}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
             )}
 

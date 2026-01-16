@@ -214,3 +214,52 @@ export const cannedSeed = [
     body: 'Issue resolved. We updated the configuration and verified service health. Let us know if it recurs.',
   },
 ];
+
+export const projectSeed = [
+  { id: 'PRJ-8', title: 'Remote worker hardening', status: 'On track', owner: 'Erik Lofgren', progress: 62 },
+  { id: 'PRJ-11', title: 'Asset lifecycle refresh', status: 'At risk', owner: 'Paul Antic', progress: 38 },
+  { id: 'PRJ-14', title: 'Service catalog expansion', status: 'On track', owner: 'Geoffrey Heller', progress: 71 },
+];
+
+export const changeSeed = [
+  {
+    id: 'CHG-1',
+    area: 'Network',
+    title: 'VPN gateway upgrade',
+    window: 'Fri 9:00p - 11:00p',
+    status: 'Scheduled',
+  },
+  {
+    id: 'CHG-2',
+    area: 'Collaboration',
+    title: 'Teams client patch rollout',
+    window: 'Tue 6:00p - 8:00p',
+    status: 'In Progress',
+  },
+  {
+    id: 'CHG-3',
+    area: 'Email',
+    title: 'Exchange spam filter tuning',
+    window: 'Wed 7:00p - 8:00p',
+    status: 'Planned',
+  },
+];
+
+export const problemSeed = [
+  { id: 'PRB-19', title: 'Recurring VPN disconnects', status: 'Root cause analysis', impact: 'Multiple teams', linked: 6 },
+  { id: 'PRB-22', title: 'Email delays with vendor relay', status: 'Known error', impact: 'Org-wide', linked: 3 },
+  { id: 'PRB-25', title: 'Print server spooler crash', status: 'Workaround', impact: 'Single site', linked: 4 },
+];
+
+export const releaseSeed = [
+  { id: 'REL-12', title: 'Q4 Windows patch bundle', status: 'Scheduled', window: 'Oct 10', owner: 'Change Mgmt' },
+  { id: 'REL-13', title: 'Teams client feature update', status: 'In Progress', window: 'Sep 28', owner: 'Unified Comms' },
+  { id: 'REL-14', title: 'Firewall policy baseline', status: 'Planned', window: 'Nov 2', owner: 'Security' },
+];
+
+export const serviceCatalogSeed = [
+  { id: 'CAT-101', name: 'New employee onboarding', type: 'Workflow', eta: '3 days', approval: 'Manager approval' },
+  { id: 'CAT-203', name: 'VPN access request', type: 'Access', eta: '1 day', approval: 'Security review' },
+  { id: 'CAT-312', name: 'Laptop replacement', type: 'Hardware', eta: '5 days', approval: 'IT approval' },
+  { id: 'CAT-404', name: 'Software Install', type: 'Software', eta: '2 days', approval: 'Cost center' },
+];
