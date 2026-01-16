@@ -30,6 +30,7 @@ import employeeDirectory from './data/employeeDirectory.json';
 import {
   createAutomationRule,
   createCannedResponse,
+  createTicket,
   fetchApprovals,
   fetchAutomationRules,
   fetchCannedResponses,
@@ -432,7 +433,7 @@ const serviceCatalog = [
   { id: 'CAT-101', name: 'New employee onboarding', type: 'Workflow', eta: '3 days', approval: 'Manager approval' },
   { id: 'CAT-203', name: 'VPN access request', type: 'Access', eta: '1 day', approval: 'Security review' },
   { id: 'CAT-312', name: 'Laptop replacement', type: 'Hardware', eta: '5 days', approval: 'IT approval' },
-  { id: 'CAT-404', name: 'Software install - Adobe', type: 'Software', eta: '2 days', approval: 'Cost center' },
+  { id: 'CAT-404', name: 'Software Install', type: 'Software', eta: '2 days', approval: 'Cost center' },
 ];
 
 const knowledgeArticlesSeed = [
@@ -1041,6 +1042,36 @@ function AppIT() {
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [reportRange, setReportRange] = useState(reportRanges[0]);
   const [automationRules, setAutomationRules] = useState([]);
+  const [catalogActiveId, setCatalogActiveId] = useState('');
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogSubmitting, setCatalogSubmitting] = useState(false);
+  const [catalogDraft, setCatalogDraft] = useState({
+    employeeName: '',
+    employeeEmail: '',
+    startDate: '',
+    department: '',
+    manager: '',
+    role: '',
+    location: '',
+    deviceNeeds: '',
+    accessNeeds: '',
+    notes: '',
+    vpnUser: '',
+    vpnEmail: '',
+    vpnReason: '',
+    vpnStartDate: '',
+    vpnEndDate: '',
+    laptopUser: '',
+    laptopEmail: '',
+    laptopIssue: '',
+    laptopAssetTag: '',
+    laptopNeededBy: '',
+    softwareUser: '',
+    softwareEmail: '',
+    softwareTitle: '',
+    softwareJustification: '',
+    softwareCostCenter: '',
+  });
   const [automationDraft, setAutomationDraft] = useState({
     name: '',
     when: 'Ticket created',
@@ -1500,6 +1531,203 @@ function AppIT() {
     ]);
   };
 
+  const handleOpenCatalog = (id) => {
+    setCatalogActiveId(id);
+    setCatalogError('');
+  };
+
+  const handleCatalogSubmit = async (event) => {
+    event.preventDefault();
+    let ticketPayload = null;
+    if (catalogActiveId === 'CAT-101') {
+      const name = catalogDraft.employeeName.trim();
+      const email = catalogDraft.employeeEmail.trim();
+      const startDate = catalogDraft.startDate.trim();
+      const department = catalogDraft.department.trim();
+      if (!name || !email || !startDate || !department) {
+        setCatalogError('Employee name, email, start date, and department are required.');
+        return;
+      }
+      const descriptionLines = [
+        'New employee onboarding request',
+        `Employee: ${name}`,
+        `Email: ${email}`,
+        `Start date: ${startDate}`,
+        `Department: ${department}`,
+        catalogDraft.manager.trim() ? `Manager: ${catalogDraft.manager.trim()}` : null,
+        catalogDraft.role.trim() ? `Role/Title: ${catalogDraft.role.trim()}` : null,
+        catalogDraft.location.trim() ? `Location: ${catalogDraft.location.trim()}` : null,
+        catalogDraft.deviceNeeds.trim() ? `Device needs: ${catalogDraft.deviceNeeds.trim()}` : null,
+        catalogDraft.accessNeeds.trim() ? `Access needs: ${catalogDraft.accessNeeds.trim()}` : null,
+        catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
+      ].filter(Boolean);
+      ticketPayload = {
+        type: 'Request',
+        title: `New employee onboarding - ${name}`,
+        requester: name,
+        requesterEmail: email,
+        department,
+        status: 'New',
+        priority: 'Medium',
+        assignee: 'Unassigned',
+        category: 'Onboarding',
+        impact: 'Just me',
+        urgency: 'Normal',
+        contactPreference: 'Email',
+        device: catalogDraft.deviceNeeds.trim(),
+        description: descriptionLines.join('\n'),
+        entries: [],
+      };
+    } else if (catalogActiveId === 'CAT-203') {
+      const name = catalogDraft.vpnUser.trim();
+      const email = catalogDraft.vpnEmail.trim();
+      const reason = catalogDraft.vpnReason.trim();
+      if (!name || !email || !reason) {
+        setCatalogError('Requester name, email, and reason are required.');
+        return;
+      }
+      const descriptionLines = [
+        'VPN access request',
+        `Requester: ${name}`,
+        `Email: ${email}`,
+        `Reason: ${reason}`,
+        catalogDraft.vpnStartDate.trim() ? `Start date: ${catalogDraft.vpnStartDate.trim()}` : null,
+        catalogDraft.vpnEndDate.trim() ? `End date: ${catalogDraft.vpnEndDate.trim()}` : null,
+        catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
+      ].filter(Boolean);
+      ticketPayload = {
+        type: 'Request',
+        title: `VPN access request - ${name}`,
+        requester: name,
+        requesterEmail: email,
+        department: catalogDraft.department.trim(),
+        status: 'New',
+        priority: 'Medium',
+        assignee: 'Unassigned',
+        category: 'Access',
+        impact: 'Just me',
+        urgency: 'Normal',
+        contactPreference: 'Email',
+        description: descriptionLines.join('\n'),
+        entries: [],
+      };
+    } else if (catalogActiveId === 'CAT-312') {
+      const name = catalogDraft.laptopUser.trim();
+      const email = catalogDraft.laptopEmail.trim();
+      const issue = catalogDraft.laptopIssue.trim();
+      if (!name || !email || !issue) {
+        setCatalogError('Requester name, email, and issue are required.');
+        return;
+      }
+      const descriptionLines = [
+        'Laptop replacement request',
+        `Requester: ${name}`,
+        `Email: ${email}`,
+        `Issue: ${issue}`,
+        catalogDraft.laptopAssetTag.trim() ? `Asset tag: ${catalogDraft.laptopAssetTag.trim()}` : null,
+        catalogDraft.laptopNeededBy.trim() ? `Needed by: ${catalogDraft.laptopNeededBy.trim()}` : null,
+        catalogDraft.department.trim() ? `Department: ${catalogDraft.department.trim()}` : null,
+        catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
+      ].filter(Boolean);
+      ticketPayload = {
+        type: 'Request',
+        title: `Laptop replacement - ${name}`,
+        requester: name,
+        requesterEmail: email,
+        department: catalogDraft.department.trim(),
+        status: 'New',
+        priority: 'Medium',
+        assignee: 'Unassigned',
+        category: 'Hardware',
+        impact: 'Just me',
+        urgency: 'Normal',
+        contactPreference: 'Email',
+        device: catalogDraft.laptopAssetTag.trim(),
+        description: descriptionLines.join('\n'),
+        entries: [],
+      };
+    } else if (catalogActiveId === 'CAT-404') {
+      const name = catalogDraft.softwareUser.trim();
+      const email = catalogDraft.softwareEmail.trim();
+      const software = catalogDraft.softwareTitle.trim();
+      if (!name || !email || !software) {
+        setCatalogError('Requester name, email, and software title are required.');
+        return;
+      }
+      const descriptionLines = [
+        'Software install request',
+        `Requester: ${name}`,
+        `Email: ${email}`,
+        `Software: ${software}`,
+        catalogDraft.softwareJustification.trim() ? `Justification: ${catalogDraft.softwareJustification.trim()}` : null,
+        catalogDraft.softwareCostCenter.trim() ? `Cost center: ${catalogDraft.softwareCostCenter.trim()}` : null,
+        catalogDraft.department.trim() ? `Department: ${catalogDraft.department.trim()}` : null,
+        catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
+      ].filter(Boolean);
+      ticketPayload = {
+        type: 'Request',
+        title: `Software install - ${software}`,
+        requester: name,
+        requesterEmail: email,
+        department: catalogDraft.department.trim(),
+        status: 'New',
+        priority: 'Medium',
+        assignee: 'Unassigned',
+        category: 'Software',
+        impact: 'Just me',
+        urgency: 'Normal',
+        contactPreference: 'Email',
+        description: descriptionLines.join('\n'),
+        entries: [],
+      };
+    } else {
+      return;
+    }
+    setCatalogSubmitting(true);
+    setCatalogError('');
+    try {
+      const response = await createTicket(ticketPayload);
+      const createdTicket = response.ticket || ticketPayload;
+      setTickets((prev) => [createdTicket, ...prev]);
+      setTicketsMeta((prev) => ({ ...prev, total: prev.total + 1 }));
+      setSelectedTicketId(createdTicket.id);
+      setActiveSection('ticket-detail');
+      setCatalogDraft({
+        employeeName: '',
+        employeeEmail: '',
+        startDate: '',
+        department: '',
+        manager: '',
+        role: '',
+        location: '',
+        deviceNeeds: '',
+        accessNeeds: '',
+        notes: '',
+        vpnUser: '',
+        vpnEmail: '',
+        vpnReason: '',
+        vpnStartDate: '',
+        vpnEndDate: '',
+        laptopUser: '',
+        laptopEmail: '',
+        laptopIssue: '',
+        laptopAssetTag: '',
+        laptopNeededBy: '',
+        softwareUser: '',
+        softwareEmail: '',
+        softwareTitle: '',
+        softwareJustification: '',
+        softwareCostCenter: '',
+      });
+      setCatalogActiveId('');
+    } catch (error) {
+      console.error('Failed to create onboarding ticket', error);
+      setCatalogError('Unable to submit the onboarding request.');
+    } finally {
+      setCatalogSubmitting(false);
+    }
+  };
+
   const handleAddCanned = () => {
     if (!cannedDraft.title.trim() || !cannedDraft.body.trim()) return;
     const newResponse = {
@@ -1952,12 +2180,384 @@ function AppIT() {
                       <h3>{item.name}</h3>
                       <p>ETA: {item.eta}</p>
                       <p>Approval: {item.approval}</p>
-                      <button className="btn btn-primary btn-small" type="button">
+                      <button className="btn btn-primary btn-small" type="button" onClick={() => handleOpenCatalog(item.id)}>
                         Request
                       </button>
                     </div>
                   ))}
                 </div>
+                {catalogActiveId === 'CAT-101' && (
+                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
+                    <div className="detail-label">New employee onboarding intake</div>
+                    <label className="label">
+                      Employee name
+                      <input
+                        className="input"
+                        value={catalogDraft.employeeName}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeName: event.target.value }))}
+                        placeholder="e.g. Jamie Rivera"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Employee email
+                      <input
+                        className="input"
+                        type="email"
+                        value={catalogDraft.employeeEmail}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeEmail: event.target.value }))}
+                        placeholder="e.g. jamier@udservices.org"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Start date
+                      <input
+                        className="input"
+                        value={catalogDraft.startDate}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, startDate: event.target.value }))}
+                        placeholder="e.g. 2026-02-01"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Department
+                      <input
+                        className="input"
+                        value={catalogDraft.department}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                        placeholder="e.g. HCBS"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Manager
+                      <input
+                        className="input"
+                        value={catalogDraft.manager}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, manager: event.target.value }))}
+                        placeholder="e.g. Chris Moore"
+                      />
+                    </label>
+                    <label className="label">
+                      Role/Title
+                      <input
+                        className="input"
+                        value={catalogDraft.role}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, role: event.target.value }))}
+                        placeholder="e.g. Program Specialist"
+                      />
+                    </label>
+                    <label className="label">
+                      Location
+                      <input
+                        className="input"
+                        value={catalogDraft.location}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, location: event.target.value }))}
+                        placeholder="e.g. Corporate Blvd"
+                      />
+                    </label>
+                    <label className="label">
+                      Device needs
+                      <input
+                        className="input"
+                        value={catalogDraft.deviceNeeds}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, deviceNeeds: event.target.value }))}
+                        placeholder="e.g. Laptop + docking station"
+                      />
+                    </label>
+                    <label className="label">
+                      Access needs
+                      <input
+                        className="input"
+                        value={catalogDraft.accessNeeds}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, accessNeeds: event.target.value }))}
+                        placeholder="e.g. Teams, Salesforce"
+                      />
+                    </label>
+                    <label className="label">
+                      Notes
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.notes}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="Anything else we should know."
+                      />
+                    </label>
+                    {catalogError && <div className="form-alert error">{catalogError}</div>}
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-small"
+                        type="button"
+                        onClick={() => setCatalogActiveId('')}
+                        disabled={catalogSubmitting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {catalogActiveId === 'CAT-203' && (
+                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
+                    <div className="detail-label">VPN access request</div>
+                    <label className="label">
+                      Requester name
+                      <input
+                        className="input"
+                        value={catalogDraft.vpnUser}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnUser: event.target.value }))}
+                        placeholder="e.g. Renee Alston"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Requester email
+                      <input
+                        className="input"
+                        type="email"
+                        value={catalogDraft.vpnEmail}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEmail: event.target.value }))}
+                        placeholder="e.g. renee@udservices.org"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Reason for access
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.vpnReason}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnReason: event.target.value }))}
+                        placeholder="Describe the remote access need."
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Start date
+                      <input
+                        className="input"
+                        value={catalogDraft.vpnStartDate}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnStartDate: event.target.value }))}
+                        placeholder="e.g. 2026-02-01"
+                      />
+                    </label>
+                    <label className="label">
+                      End date
+                      <input
+                        className="input"
+                        value={catalogDraft.vpnEndDate}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEndDate: event.target.value }))}
+                        placeholder="Leave blank if ongoing"
+                      />
+                    </label>
+                    <label className="label">
+                      Department (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.department}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                        placeholder="e.g. HCBS"
+                      />
+                    </label>
+                    <label className="label">
+                      Notes
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.notes}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="Anything else we should know."
+                      />
+                    </label>
+                    {catalogError && <div className="form-alert error">{catalogError}</div>}
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-small"
+                        type="button"
+                        onClick={() => setCatalogActiveId('')}
+                        disabled={catalogSubmitting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {catalogActiveId === 'CAT-312' && (
+                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
+                    <div className="detail-label">Laptop replacement request</div>
+                    <label className="label">
+                      Requester name
+                      <input
+                        className="input"
+                        value={catalogDraft.laptopUser}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopUser: event.target.value }))}
+                        placeholder="e.g. Jamie Rivera"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Requester email
+                      <input
+                        className="input"
+                        type="email"
+                        value={catalogDraft.laptopEmail}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopEmail: event.target.value }))}
+                        placeholder="e.g. jamier@udservices.org"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Issue summary
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.laptopIssue}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopIssue: event.target.value }))}
+                        placeholder="Describe the performance or hardware issue."
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Asset tag (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.laptopAssetTag}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopAssetTag: event.target.value }))}
+                        placeholder="e.g. LAPTOP418"
+                      />
+                    </label>
+                    <label className="label">
+                      Needed by (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.laptopNeededBy}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopNeededBy: event.target.value }))}
+                        placeholder="e.g. Next Friday"
+                      />
+                    </label>
+                    <label className="label">
+                      Department (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.department}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                        placeholder="e.g. HCBS"
+                      />
+                    </label>
+                    <label className="label">
+                      Notes
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.notes}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="Anything else we should know."
+                      />
+                    </label>
+                    {catalogError && <div className="form-alert error">{catalogError}</div>}
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-small"
+                        type="button"
+                        onClick={() => setCatalogActiveId('')}
+                        disabled={catalogSubmitting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {catalogActiveId === 'CAT-404' && (
+                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
+                    <div className="detail-label">Software install request</div>
+                    <label className="label">
+                      Requester name
+                      <input
+                        className="input"
+                        value={catalogDraft.softwareUser}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareUser: event.target.value }))}
+                        placeholder="e.g. Paul Antic"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Requester email
+                      <input
+                        className="input"
+                        type="email"
+                        value={catalogDraft.softwareEmail}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareEmail: event.target.value }))}
+                        placeholder="e.g. paul@udservices.org"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Software title
+                      <input
+                        className="input"
+                        value={catalogDraft.softwareTitle}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareTitle: event.target.value }))}
+                        placeholder="e.g. Adobe Acrobat Pro"
+                        required
+                      />
+                    </label>
+                    <label className="label">
+                      Justification
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.softwareJustification}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareJustification: event.target.value }))}
+                        placeholder="Describe why this is needed."
+                      />
+                    </label>
+                    <label className="label">
+                      Cost center (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.softwareCostCenter}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareCostCenter: event.target.value }))}
+                        placeholder="e.g. HCBS-112"
+                      />
+                    </label>
+                    <label className="label">
+                      Department (optional)
+                      <input
+                        className="input"
+                        value={catalogDraft.department}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                        placeholder="e.g. Resource Center"
+                      />
+                    </label>
+                    <label className="label">
+                      Notes
+                      <textarea
+                        className="textarea"
+                        value={catalogDraft.notes}
+                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                        placeholder="Anything else we should know."
+                      />
+                    </label>
+                    {catalogError && <div className="form-alert error">{catalogError}</div>}
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-small"
+                        type="button"
+                        onClick={() => setCatalogActiveId('')}
+                        disabled={catalogSubmitting}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </section>
             )}
 

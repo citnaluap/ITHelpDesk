@@ -87,6 +87,12 @@ export const updateTicket = async (id, updates) =>
     body: JSON.stringify({ id, updates }),
   });
 
+export const createTicket = async (ticket) =>
+  request('/api/tickets', {
+    method: 'POST',
+    body: JSON.stringify({ ticket }),
+  });
+
 export const updateApproval = async (id, updates) =>
   request('/api/approvals', {
     method: 'PATCH',

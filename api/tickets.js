@@ -13,6 +13,13 @@ const parseBody = (req) => {
   return req.body;
 };
 
+const formatCreatedLabel = (timestamp) => {
+  if (!timestamp) return 'Just now';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
 const parseQuery = (req) => {
   const query = req.query || {};
   const getValue = (key) => (Array.isArray(query[key]) ? query[key][0] : query[key]);
@@ -119,6 +126,41 @@ export default async function handler(req, res) {
         WHERE id = ${id};
       `;
       return res.status(200).json({ ticket: next });
+    }
+
+    if (req.method === 'POST') {
+      const body = parseBody(req);
+      const incoming = body?.ticket || body;
+      if (!incoming) {
+        return res.status(400).json({ error: 'Missing ticket payload' });
+      }
+      const createdAt = incoming.createdAt || Date.now();
+      const ticket = {
+        id: incoming.id || `REQ-${Date.now()}`,
+        type: incoming.type || 'Request',
+        title: incoming.title || incoming.subject || 'New support request',
+        requester: incoming.requester || incoming.requesterName || 'Unknown requester',
+        requesterEmail: incoming.requesterEmail || incoming.contactEmail || '',
+        department: incoming.department || '',
+        status: incoming.status || 'New',
+        priority: incoming.priority || 'Medium',
+        assignee: incoming.assignee || 'Unassigned',
+        created: incoming.created || formatCreatedLabel(createdAt),
+        createdAt,
+        category: incoming.category || 'General',
+        impact: incoming.impact || 'Just me',
+        urgency: incoming.urgency || 'Normal',
+        contactPreference: incoming.contactPreference || 'Email',
+        device: incoming.device || '',
+        description: incoming.description || incoming.details || '',
+        entries: Array.isArray(incoming.entries) ? incoming.entries : [],
+      };
+      await db`
+        INSERT INTO tickets (id, data)
+        VALUES (${ticket.id}, ${JSON.stringify(ticket)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;
+      `;
+      return res.status(200).json({ ticket });
     }
 
     return res.status(405).json({ error: 'Method not allowed' });

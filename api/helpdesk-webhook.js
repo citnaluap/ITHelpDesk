@@ -36,6 +36,10 @@ const parseEmailBody = (body) => {
     if (/^https?:\/\//i.test(line) || /^www\./i.test(line)) return true;
     return false;
   };
+  const isMetaLine = (line) =>
+    /\b\d{1,2}\/\d{1,2}\/\d{4}\b/i.test(line) ||
+    /\b\d{1,2}:\d{2}\s*(AM|PM)\b/i.test(line) ||
+    /-\s*$/.test(line);
   const isSignatureMarker = (line) =>
     /^(thanks|thank you|regards|sincerely|best|respectfully)\b/i.test(line) ||
     /^-{2,}$/.test(line) ||
@@ -53,7 +57,9 @@ const parseEmailBody = (body) => {
     let hasContent = false;
     for (const line of linesToClean) {
       if (isNoiseLine(line)) continue;
+      if (isMetaLine(line)) continue;
       if (isSignatureMarker(line) && hasContent) break;
+      if (hasContent && /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}$/.test(line)) break;
       cleaned.push(line);
       if (/[a-z0-9]/i.test(line)) hasContent = true;
     }
@@ -82,7 +88,10 @@ const parseEmailBody = (body) => {
     }
   }
 
-  const discussionIndex = filtered.findIndex((line) => /^Discussion$/i.test(line));
+  const discussionIndex = filtered.findIndex((line) => {
+    const normalized = line.replace(/[^a-z]/gi, '').toLowerCase();
+    return normalized === 'discussion' || normalized.startsWith('discussion');
+  });
   if (discussionIndex >= 0) {
     requester = filtered[discussionIndex + 1] || '';
     const afterDiscussion = filtered.slice(discussionIndex + 2);
@@ -216,9 +225,9 @@ const mapPayloadToTicket = (payload) => {
       ticket.description ||
       ticket.details ||
       ticket.notes ||
+      parsedEmail.description ||
       payload?.cleanMessage ||
       payload?.rawText ||
-      parsedEmail.description ||
       bodyContent ||
       '',
     entries: Array.isArray(ticket.entries)
