@@ -25,7 +25,9 @@ const parseEmailBody = (body) => {
   }
 
   const lines = body.split(/\r?\n/).map((line) => line.trim());
-  const filtered = lines.filter((line) => line && !line.startsWith('**DISCLAIMER'));
+  const disclaimerIndex = lines.findIndex((line) => /\bDISCLAIMER\b/i.test(line));
+  const scopedLines = disclaimerIndex >= 0 ? lines.slice(0, disclaimerIndex) : lines;
+  const filtered = scopedLines.filter((line) => line);
   const isNoiseLine = (line) => {
     if (!line) return true;
     if (/^markdig\.syntax\.inlines\.linkinline/i.test(line)) return true;
@@ -88,7 +90,7 @@ const parseEmailBody = (body) => {
     description = cleanedDiscussion.join('\n').trim();
   }
 
-  if (!description) {
+  if (!description && discussionIndex < 0) {
     description = filtered.slice(0, 40).join(' ').trim();
   }
 
