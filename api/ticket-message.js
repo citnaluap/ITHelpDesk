@@ -82,6 +82,11 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    console.error('Failed to send ticket message', error);
+    const isProd = process.env.NODE_ENV === 'production';
+    return res.status(500).json({
+      error: error.message || 'Failed to send email',
+      ...(isProd ? {} : { stack: error.stack }),
+    });
   }
 }
