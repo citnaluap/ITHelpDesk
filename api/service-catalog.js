@@ -41,8 +41,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = parseBody(req);
       const item = body?.item || body;
-      if (!item?.id) {
-        return res.status(400).json({ error: 'Missing catalog item payload' });
+      if (!item?.id || !item?.name || !item?.type || !item?.eta) {
+        return res.status(400).json({ error: 'Missing catalog item id, name, type, or eta' });
       }
       await db`
         INSERT INTO service_catalog (id, data)

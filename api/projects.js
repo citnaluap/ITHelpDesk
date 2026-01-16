@@ -41,8 +41,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = parseBody(req);
       const project = body?.project || body;
-      if (!project?.id) {
-        return res.status(400).json({ error: 'Missing project payload' });
+      if (!project?.id || !project?.title || !project?.owner) {
+        return res.status(400).json({ error: 'Missing project id, title, or owner' });
       }
       await db`
         INSERT INTO projects (id, data)

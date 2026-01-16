@@ -41,8 +41,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = parseBody(req);
       const change = body?.change || body;
-      if (!change?.id) {
-        return res.status(400).json({ error: 'Missing change payload' });
+      if (!change?.id || !change?.area || !change?.title || !change?.window) {
+        return res.status(400).json({ error: 'Missing change id, area, title, or window' });
       }
       await db`
         INSERT INTO change_events (id, data)

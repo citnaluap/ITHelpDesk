@@ -41,8 +41,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = parseBody(req);
       const release = body?.release || body;
-      if (!release?.id) {
-        return res.status(400).json({ error: 'Missing release payload' });
+      if (!release?.id || !release?.title || !release?.owner || !release?.window) {
+        return res.status(400).json({ error: 'Missing release id, title, owner, or window' });
       }
       await db`
         INSERT INTO releases (id, data)

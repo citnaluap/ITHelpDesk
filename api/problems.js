@@ -41,8 +41,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = parseBody(req);
       const problem = body?.problem || body;
-      if (!problem?.id) {
-        return res.status(400).json({ error: 'Missing problem payload' });
+      if (!problem?.id || !problem?.title || !problem?.impact) {
+        return res.status(400).json({ error: 'Missing problem id, title, or impact' });
       }
       await db`
         INSERT INTO problems (id, data)
