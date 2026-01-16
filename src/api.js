@@ -92,3 +92,9 @@ export const updateApproval = async (id, updates) =>
     method: 'PATCH',
     body: JSON.stringify({ id, updates }),
   });
+
+export const sendTicketMessage = async (payload) =>
+  request('/api/ticket-message', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });

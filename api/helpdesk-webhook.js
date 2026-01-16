@@ -26,6 +26,37 @@ const parseEmailBody = (body) => {
 
   const lines = body.split(/\r?\n/).map((line) => line.trim());
   const filtered = lines.filter((line) => line && !line.startsWith('**DISCLAIMER'));
+  const isNoiseLine = (line) => {
+    if (!line) return true;
+    if (/^markdig\.syntax\.inlines\.linkinline/i.test(line)) return true;
+    if (/^\[cid:/i.test(line)) return true;
+    if (/^\[image\]$/i.test(line)) return true;
+    if (/^https?:\/\//i.test(line) || /^www\./i.test(line)) return true;
+    return false;
+  };
+  const isSignatureMarker = (line) =>
+    /^(thanks|thank you|regards|sincerely|best|respectfully)\b/i.test(line) ||
+    /^-{2,}$/.test(line) ||
+    /^sent from/i.test(line) ||
+    /^follow us/i.test(line) ||
+    /^we['’]d love your help/i.test(line) ||
+    /^amazon wish list/i.test(line) ||
+    /^partnering for paws/i.test(line) ||
+    /\budservices\.org\b/i.test(line) ||
+    /\b(o:|c:|office|mobile|cell|fax)\b/i.test(line) ||
+    /\b\d{3}[-)\s]\d{3}[-\s]\d{4}\b/.test(line) ||
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(line);
+  const cleanDiscussionLines = (linesToClean) => {
+    const cleaned = [];
+    let hasContent = false;
+    for (const line of linesToClean) {
+      if (isNoiseLine(line)) continue;
+      if (isSignatureMarker(line) && hasContent) break;
+      cleaned.push(line);
+      if (/[a-z0-9]/i.test(line)) hasContent = true;
+    }
+    return cleaned;
+  };
 
   let ticketNumber = '';
   let subject = '';
@@ -53,10 +84,8 @@ const parseEmailBody = (body) => {
   if (discussionIndex >= 0) {
     requester = filtered[discussionIndex + 1] || '';
     const afterDiscussion = filtered.slice(discussionIndex + 2);
-    const descriptionStart = afterDiscussion.findIndex((line) => /issues|problem|request|help/i.test(line));
-    if (descriptionStart >= 0) {
-      description = afterDiscussion.slice(descriptionStart).join(' ').trim();
-    }
+    const cleanedDiscussion = cleanDiscussionLines(afterDiscussion);
+    description = cleanedDiscussion.join('\n').trim();
   }
 
   if (!description) {

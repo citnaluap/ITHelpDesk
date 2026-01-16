@@ -34,6 +34,7 @@ import {
   fetchAutomationRules,
   fetchCannedResponses,
   fetchTickets,
+  sendTicketMessage,
   updateApproval,
   updateAutomationRule,
   updateTicket,
@@ -41,7 +42,7 @@ import {
 import InlineTag from './components/InlineTag';
 import TicketDetail from './components/TicketDetail';
 import { toKebabCase } from './utils/format';
-import { getTicketDescription } from './utils/tickets';
+import { getTicketDescription, getTicketSummary } from './utils/tickets';
 
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
 const TICKET_FILTERS = ['All', 'New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
@@ -920,7 +921,7 @@ const TicketPreviewCard = ({ ticket, onOpen, title = 'Ticket preview', compact =
         <p className="work-meta">
           {ticket.requester} - {ticket.requesterEmail}
         </p>
-        <p className="preview-description">{getTicketDescription(ticket) || 'No description provided yet.'}</p>
+        <p className="preview-description">{getTicketSummary(ticket) || 'No description provided yet.'}</p>
         <div className="preview-grid">
           <div>
             <div className="detail-label">Impact</div>
@@ -1407,6 +1408,17 @@ function AppIT() {
       updateTicket(ticketId, nextForRequest).catch((error) => {
         console.error('Failed to append entry', error);
       });
+      if (entry.type === 'message') {
+        sendTicketMessage({
+          ticketId,
+          subject: nextForRequest.title,
+          message: entry.text,
+          requesterEmail: nextForRequest.requesterEmail,
+          requesterName: nextForRequest.requester,
+        }).catch((error) => {
+          console.error('Failed to send requester message', error);
+        });
+      }
     }
   };
 
