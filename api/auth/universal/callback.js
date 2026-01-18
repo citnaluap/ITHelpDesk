@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       return redirectWithError(res, 'Duo session did not match. Please try again.');
     }
 
-    const client = buildClient(req);
+    const client = await buildClient(req);
     const token = await client.exchangeAuthorizationCodeFor2FAResult(code, authPayload.username);
     const authResult = token?.auth_result?.result || token?.auth_context?.result || '';
     if (authResult && authResult !== 'allow') {

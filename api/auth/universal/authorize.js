@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       return redirectWithError(res, 'Select a valid technician before continuing.');
     }
 
-    const client = buildClient(req);
+    const client = await buildClient(req);
     const state = client.generateState();
     const username = technician.email || technician.name;
     const authUrl = await client.createAuthUrl(username, state);

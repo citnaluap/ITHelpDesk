@@ -1,4 +1,3 @@
-import { Client } from '@duosecurity/duo_universal';
 import { TECHNICIANS } from '../../../src/data/technicians.js';
 
 const getHeaderValue = (header) => (Array.isArray(header) ? header[0] : header || '');
@@ -35,7 +34,12 @@ const getRedirectUrl = (req) => {
   return origin ? `${origin}/api/auth/universal/callback` : '/api/auth/universal/callback';
 };
 
-const buildClient = (req) => {
+const loadClient = async () => {
+  const { Client } = await import('@duosecurity/duo_universal');
+  return Client;
+};
+
+const buildClient = async (req) => {
   const clientId = process.env.DUO_CLIENT_ID;
   const clientSecret = process.env.DUO_CLIENT_SECRET;
   const apiHost = process.env.DUO_API_HOST;
@@ -47,6 +51,7 @@ const buildClient = (req) => {
   if (missing.length) {
     throw new Error(`Missing Duo credentials: ${missing.join(', ')}`);
   }
+  const Client = await loadClient();
   return new Client({
     clientId,
     clientSecret,
