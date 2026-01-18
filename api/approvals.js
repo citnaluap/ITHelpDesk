@@ -1,5 +1,5 @@
-import { ensureTables, getSql } from './_db';
-import { approvalSeed } from './seedData';
+import { ensureTables, getSql } from './_db.js';
+import { approvalSeed } from './seedData.js';
 
 const parseBody = (req) => {
   if (!req.body) return null;

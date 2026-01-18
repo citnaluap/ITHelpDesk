@@ -1,5 +1,5 @@
-import { ensureTables, getSql } from './_db';
-import { ticketSeed } from './seedData';
+import { ensureTables, getSql } from './_db.js';
+import { ticketSeed } from './seedData.js';
 
 const parseBody = (req) => {
   if (!req.body) return null;
