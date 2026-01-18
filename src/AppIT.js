@@ -901,7 +901,7 @@ function AppIT() {
                 <span className="brand-initials">UDS</span>
               </div>
               <div>
-                <h1>UD Services IT Support</h1>
+                <h1>UDS IT Support</h1>
                 <p>Select your name and continue to Duo verification to enter the support workspace.</p>
               </div>
             </div>
@@ -952,7 +952,7 @@ function AppIT() {
               <span className="brand-initials">UDS</span>
             </div>
             <div>
-              <div className="brand-title">UD Services Help Desk</div>
+              <div className="brand-title">UDS Help Desk</div>
               <div className="brand-subtitle">IT operations workspace</div>
             </div>
           </div>
