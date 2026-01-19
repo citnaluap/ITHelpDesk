@@ -1,4 +1,5 @@
 import { ensureTables, getSql } from './_db.js';
+import { applyCors, validateSecret } from './_security.js';
 
 const parseBody = (req) => {
   if (!req.body) return null;
@@ -244,25 +245,8 @@ const mapPayloadToTicket = (payload) => {
   };
 };
 
-const validateSecret = (req) => {
-  const secret = process.env.WEBHOOK_SECRET;
-  if (!secret) return true;
-  const header = req.headers['x-webhook-secret'] || req.headers['authorization'] || '';
-  const token = Array.isArray(header) ? header[0] : header;
-  if (token.startsWith('Bearer ')) {
-    return token.slice(7) === secret;
-  }
-  return token === secret;
-};
-
-const applyCors = (res) => {
-  res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ALLOW_ORIGIN || '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-webhook-secret');
-};
-
 export default async function handler(req, res) {
-  applyCors(res);
+  applyCors(req, res, { methods: 'POST, OPTIONS' });
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();

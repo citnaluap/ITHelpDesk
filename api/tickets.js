@@ -1,5 +1,6 @@
 import { ensureTables, getSql } from './_db.js';
 import { ticketSeed } from './seedData.js';
+import { applyCors, requireSecretForExternal, validateSecret } from './_security.js';
 
 const parseBody = (req) => {
   if (!req.body) return null;
@@ -71,6 +72,14 @@ const seedTickets = async (db) => {
 };
 
 export default async function handler(req, res) {
+  applyCors(req, res, { methods: 'GET, POST, PATCH, OPTIONS' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  if (requireSecretForExternal(req) && !validateSecret(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   try {
     await ensureTables();
     const db = getSql();

@@ -1,3 +1,5 @@
+import { applyCors, requireSecretForExternal, validateSecret } from './_security.js';
+
 const parseBody = (req) => {
   if (!req.body) return null;
   if (typeof req.body === 'string') {
@@ -17,6 +19,13 @@ const buildSubject = (ticketId, subject) => {
 };
 
 export default async function handler(req, res) {
+  applyCors(req, res, { methods: 'POST, OPTIONS' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  if (requireSecretForExternal(req) && !validateSecret(req)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
