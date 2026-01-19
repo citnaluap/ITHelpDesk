@@ -159,3 +159,49 @@ export const createCatalogItem = async (item) =>
     method: 'POST',
     body: JSON.stringify({ item }),
   });
+
+export const fetchServiceStatus = async () => {
+  const data = await request('/api/service-status');
+  return data.statuses || [];
+};
+
+export const createServiceStatus = async (item) =>
+  request('/api/service-status', {
+    method: 'POST',
+    body: JSON.stringify({ item }),
+  });
+
+export const updateServiceStatus = async (id, updates) =>
+  request('/api/service-status', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, updates }),
+  });
+
+export const deleteServiceStatus = async (id) =>
+  request('/api/service-status', {
+    method: 'DELETE',
+    body: JSON.stringify({ id }),
+  });
+
+export const fetchAnnouncements = async () => {
+  const data = await request('/api/announcements');
+  return data.announcements || [];
+};
+
+export const createAnnouncement = async (item) =>
+  request('/api/announcements', {
+    method: 'POST',
+    body: JSON.stringify({ item }),
+  });
+
+export const updateAnnouncement = async (id, updates) =>
+  request('/api/announcements', {
+    method: 'PATCH',
+    body: JSON.stringify({ id, updates }),
+  });
+
+export const deleteAnnouncement = async (id) =>
+  request('/api/announcements', {
+    method: 'DELETE',
+    body: JSON.stringify({ id }),
+  });

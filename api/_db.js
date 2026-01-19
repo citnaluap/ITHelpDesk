@@ -72,4 +72,16 @@ export const ensureTables = async () => {
       data jsonb NOT NULL
     );
   `;
+  await db`
+    CREATE TABLE IF NOT EXISTS service_status (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS announcements (
+      id text PRIMARY KEY,
+      data jsonb NOT NULL
+    );
+  `;
 };

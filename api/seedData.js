@@ -197,6 +197,37 @@ export const automationSeed = [
   },
 ];
 
+export const serviceStatusSeed = [
+  { id: 'STS-1', name: 'Email and MFA', state: 'Operational', color: '#008542' },
+  { id: 'STS-2', name: 'VPN / Remote Access', state: 'Degraded', color: '#f9a51a' },
+  { id: 'STS-3', name: 'File Shares', state: 'Operational', color: '#008542' },
+  { id: 'STS-4', name: 'Printing', state: 'Investigating', color: '#003551' },
+];
+
+export const announcementSeed = [
+  {
+    id: 'ANN-1',
+    title: 'Duo push update on Friday',
+    body: 'MFA prompts will look different starting Friday. No action needed.',
+    date: 'Sep 4',
+    tag: 'Security',
+  },
+  {
+    id: 'ANN-2',
+    title: 'VPN gateway maintenance',
+    body: 'Expect brief reconnects between 9:00p and 11:00p on Friday.',
+    date: 'Sep 6',
+    tag: 'Network',
+  },
+  {
+    id: 'ANN-3',
+    title: 'New hire onboarding improvements',
+    body: 'Intake forms now auto-collect hardware and access needs.',
+    date: 'Sep 9',
+    tag: 'Process',
+  },
+];
+
 export const cannedSeed = [
   {
     id: 'CAN-01',

@@ -30,13 +30,18 @@ import employeeDirectory from './data/employeeDirectory.json';
 import { TECHNICIANS } from './data/technicians';
 import {
   createAutomationRule,
+  createAnnouncement,
   createCannedResponse,
   createCatalogItem,
   createChange,
   createProblem,
   createProject,
   createRelease,
+  createServiceStatus,
   createTicket,
+  deleteAnnouncement,
+  deleteServiceStatus,
+  fetchAnnouncements,
   fetchApprovals,
   fetchAutomationRules,
   fetchCannedResponses,
@@ -45,10 +50,13 @@ import {
   fetchProblems,
   fetchProjects,
   fetchReleases,
+  fetchServiceStatus,
   fetchTickets,
   sendTicketMessage,
+  updateAnnouncement,
   updateApproval,
   updateAutomationRule,
+  updateServiceStatus,
   updateTicket,
 } from './api';
 import InlineTag from './components/InlineTag';
@@ -59,6 +67,7 @@ import { getTicketDescription, getTicketSummary } from './utils/tickets';
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
 const TICKET_FILTERS = ['All', 'New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
 const STATUS_OPTIONS = ['New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
+const SERVICE_STATUS_OPTIONS = ['Operational', 'Degraded', 'Investigating', 'Maintenance', 'Outage'];
 const TICKET_PAGE_SIZE = 12;
 const APPROVAL_PAGE_SIZE = 8;
 const ASSIGNEES = [
@@ -93,36 +102,66 @@ const navItems = [
   { id: 'canned', label: 'Canned Responses', icon: MessageSquareText, targetId: 'canned' },
 ];
 
-const systemStatus = [
-  { name: 'Email and MFA', state: 'Operational', color: '#008542' },
-  { name: 'VPN / Remote Access', state: 'Degraded', color: '#f9a51a' },
-  { name: 'File Shares', state: 'Operational', color: '#008542' },
-  { name: 'Printing', state: 'Investigating', color: '#003551' },
+const SERVICE_STATUS_FALLBACK = [
+  { id: 'STS-1', name: 'Email and MFA', state: 'Operational', color: '#008542' },
+  { id: 'STS-2', name: 'VPN / Remote Access', state: 'Degraded', color: '#f9a51a' },
+  { id: 'STS-3', name: 'File Shares', state: 'Operational', color: '#008542' },
+  { id: 'STS-4', name: 'Printing', state: 'Investigating', color: '#003551' },
 ];
 
-const announcements = [
+const LOCAL_SERVICE_STATUS_KEY = 'dev_service_status';
+const LOCAL_ANNOUNCEMENTS_KEY = 'dev_announcements';
+
+const ANNOUNCEMENTS_FALLBACK = [
   {
-    id: 'ann-1',
+    id: 'ANN-1',
     title: 'Duo push update on Friday',
     body: 'MFA prompts will look different starting Friday. No action needed.',
     date: 'Sep 4',
     tag: 'Security',
   },
   {
-    id: 'ann-2',
+    id: 'ANN-2',
     title: 'VPN gateway maintenance',
     body: 'Expect brief reconnects between 9:00p and 11:00p on Friday.',
     date: 'Sep 6',
     tag: 'Network',
   },
   {
-    id: 'ann-3',
+    id: 'ANN-3',
     title: 'New hire onboarding improvements',
     body: 'Intake forms now auto-collect hardware and access needs.',
     date: 'Sep 9',
     tag: 'Process',
   },
 ];
+
+const SERVICE_STATUS_COLORS = {
+  Operational: '#008542',
+  Degraded: '#f9a51a',
+  Investigating: '#003551',
+  Maintenance: '#2563eb',
+  Outage: '#dc2626',
+};
+
+const getServiceStatusColor = (state) => SERVICE_STATUS_COLORS[state] || '#008542';
+
+const readLocalList = (key) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+};
+
+const writeLocalList = (key, value) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+};
 
 const workQueue = [
   {
@@ -819,8 +858,8 @@ const NavItem = ({ item, isActive, onClick }) => {
 
 const MetricCard = ({ item, style }) => {
   const Icon = item.icon;
-  return (
-    <div className="card metric-card reveal" style={style}>
+  const content = (
+    <>
       <span className="metric-icon">
         <Icon size={18} />
       </span>
@@ -829,6 +868,24 @@ const MetricCard = ({ item, style }) => {
         <div className="metric-label">{item.label}</div>
         <div className="metric-sub">{item.sub}</div>
       </div>
+    </>
+  );
+  if (item.onClick) {
+    return (
+      <button
+        className="card metric-card reveal metric-action"
+        style={style}
+        type="button"
+        onClick={item.onClick}
+        aria-label={item.ariaLabel || `View ${item.label}`}
+      >
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="card metric-card reveal" style={style}>
+      {content}
     </div>
   );
 };
@@ -962,11 +1019,25 @@ const TicketPreviewCard = ({ ticket, onOpen, title = 'Ticket preview', compact =
 );
 
 
-const AnnouncementCard = ({ item }) => (
+const AnnouncementCard = ({ item, onEdit, onRemove, isReadOnly }) => (
   <div className="announcement-card">
     <div className="list-inline">
-      <InlineTag>{item.tag}</InlineTag>
-      <span className="timestamp">{item.date}</span>
+      <InlineTag>{item.tag || 'General'}</InlineTag>
+      <span className="timestamp">{item.date || ''}</span>
+      {!isReadOnly && (onEdit || onRemove) && (
+        <div className="list-inline" style={{ marginLeft: 'auto' }}>
+          {onEdit && (
+            <button className="btn btn-ghost btn-small" type="button" onClick={() => onEdit(item)}>
+              Edit
+            </button>
+          )}
+          {onRemove && (
+            <button className="btn btn-ghost btn-small" type="button" onClick={() => onRemove(item.id)}>
+              Remove
+            </button>
+          )}
+        </div>
+      )}
     </div>
     <p className="announcement-title">{item.title}</p>
     <p className="announcement-body">{item.body}</p>
@@ -1022,6 +1093,8 @@ const buildAssetList = (record) => {
 };
 
 function AppIT() {
+  const isAuthRequired = process.env.NODE_ENV === 'production';
+  const defaultDevUser = isAuthRequired ? '' : (TECHNICIANS[0]?.name || '');
   const [activeSection, setActiveSection] = useState('overview');
   const [search, setSearch] = useState('');
   const [workFilter, setWorkFilter] = useState('All');
@@ -1037,8 +1110,8 @@ function AppIT() {
   const [approvalsError, setApprovalsError] = useState('');
   const [ticketPage, setTicketPage] = useState(0);
   const [approvalPage, setApprovalPage] = useState(0);
-  const [currentUser, setCurrentUser] = useState('');
-  const [selectedUser, setSelectedUser] = useState('');
+  const [currentUser, setCurrentUser] = useState(defaultDevUser);
+  const [selectedUser, setSelectedUser] = useState(defaultDevUser);
   const [reportRange, setReportRange] = useState(reportRanges[0]);
   const [automationRules, setAutomationRules] = useState([]);
   const [catalogActiveId, setCatalogActiveId] = useState('');
@@ -1133,6 +1206,16 @@ function AppIT() {
   });
   const [releaseError, setReleaseError] = useState('');
   const [showReleaseForm, setShowReleaseForm] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState(() => SERVICE_STATUS_FALLBACK);
+  const [serviceStatusDraft, setServiceStatusDraft] = useState({ name: '', state: 'Operational' });
+  const [serviceStatusError, setServiceStatusError] = useState('');
+  const [showServiceStatusForm, setShowServiceStatusForm] = useState(false);
+  const [editingServiceStatusId, setEditingServiceStatusId] = useState('');
+  const [announcements, setAnnouncements] = useState(() => ANNOUNCEMENTS_FALLBACK);
+  const [announcementDraft, setAnnouncementDraft] = useState({ title: '', body: '', tag: '', date: '' });
+  const [announcementError, setAnnouncementError] = useState('');
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState('');
   const [theme, setTheme] = useState('light');
   const [authError, setAuthError] = useState('');
 
@@ -1346,6 +1429,51 @@ function AppIT() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+    const loadServiceStatus = async () => {
+      setServiceStatusError('');
+      if (!isAuthRequired) {
+        const localStatuses = readLocalList(LOCAL_SERVICE_STATUS_KEY);
+        if (!isActive) return;
+        setServiceStatus(localStatuses && localStatuses.length ? localStatuses : SERVICE_STATUS_FALLBACK);
+        return;
+      }
+      try {
+        const statuses = await fetchServiceStatus();
+        if (!isActive) return;
+        if (statuses.length) setServiceStatus(statuses);
+      } catch (error) {
+        if (!isActive) return;
+        if (!isAuthRequired) return;
+        setServiceStatusError('Unable to load service status.');
+      }
+    };
+    const loadAnnouncements = async () => {
+      setAnnouncementError('');
+      if (!isAuthRequired) {
+        const localAnnouncements = readLocalList(LOCAL_ANNOUNCEMENTS_KEY);
+        if (!isActive) return;
+        setAnnouncements(localAnnouncements && localAnnouncements.length ? localAnnouncements : ANNOUNCEMENTS_FALLBACK);
+        return;
+      }
+      try {
+        const items = await fetchAnnouncements();
+        if (!isActive) return;
+        if (items.length) setAnnouncements(items);
+      } catch (error) {
+        if (!isActive) return;
+        if (!isAuthRequired) return;
+        setAnnouncementError('Unable to load announcements.');
+      }
+    };
+    loadServiceStatus();
+    loadAnnouncements();
+    return () => {
+      isActive = false;
+    };
+  }, [isAuthRequired]);
+
+  useEffect(() => {
     if (!selectedCannedId && cannedResponses.length) {
       setSelectedCannedId(cannedResponses[0].id);
     }
@@ -1386,6 +1514,15 @@ function AppIT() {
   }, []);
 
   useEffect(() => {
+    if (isAuthRequired) return;
+    if (defaultDevUser && !currentUser) {
+      setCurrentUser(defaultDevUser);
+      setSelectedUser(defaultDevUser);
+    }
+  }, [isAuthRequired, defaultDevUser, currentUser]);
+
+  useEffect(() => {
+    if (!isAuthRequired) return undefined;
     let isMounted = true;
     const loadSession = async () => {
       try {
@@ -1405,7 +1542,7 @@ function AppIT() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isAuthRequired]);
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -1514,6 +1651,12 @@ function AppIT() {
 
   const handleSignOut = () => {
     const clearSession = async () => {
+      if (!isAuthRequired) {
+        setCurrentUser(defaultDevUser);
+        setSelectedUser(defaultDevUser);
+        setAuthError('');
+        return;
+      }
       try {
         await fetch('/api/auth/universal/logout', { method: 'POST', credentials: 'include' });
       } catch (error) {
@@ -2047,6 +2190,138 @@ function AppIT() {
   const formatShortDate = () =>
     new Date().toLocaleString('en-US', { month: 'short', day: 'numeric' });
 
+  const resetServiceStatusForm = () => {
+    setServiceStatusDraft({ name: '', state: 'Operational' });
+    setEditingServiceStatusId('');
+    setShowServiceStatusForm(false);
+  };
+
+  const handleEditServiceStatus = (item) => {
+    setServiceStatusDraft({ name: item.name, state: item.state });
+    setEditingServiceStatusId(item.id);
+    setShowServiceStatusForm(true);
+  };
+
+  const handleSaveServiceStatus = async () => {
+    const name = serviceStatusDraft.name.trim();
+    const state = serviceStatusDraft.state.trim();
+    if (!name || !state) {
+      setServiceStatusError('Service name and status are required.');
+      return;
+    }
+    setServiceStatusError('');
+    const next = {
+      id: editingServiceStatusId || createId('STS'),
+      name,
+      state,
+      color: getServiceStatusColor(state),
+    };
+    const nextList = editingServiceStatusId
+      ? serviceStatus.map((item) => (item.id === next.id ? next : item))
+      : [...serviceStatus, next];
+    setServiceStatus(nextList);
+    resetServiceStatusForm();
+    if (!isAuthRequired) {
+      writeLocalList(LOCAL_SERVICE_STATUS_KEY, nextList);
+      return;
+    }
+    try {
+      if (editingServiceStatusId) {
+        await updateServiceStatus(next.id, next);
+      } else {
+        await createServiceStatus(next);
+      }
+    } catch (error) {
+      console.error('Failed to save service status', error);
+      setServiceStatusError('Unable to save the service status.');
+    }
+  };
+
+  const handleDeleteServiceStatus = (id) => {
+    const nextList = serviceStatus.filter((item) => item.id !== id);
+    setServiceStatus(nextList);
+    if (editingServiceStatusId === id) {
+      resetServiceStatusForm();
+    }
+    if (!isAuthRequired) {
+      writeLocalList(LOCAL_SERVICE_STATUS_KEY, nextList);
+      return;
+    }
+    deleteServiceStatus(id).catch((error) => {
+      console.error('Failed to delete service status', error);
+      setServiceStatusError('Unable to delete the service status.');
+    });
+  };
+
+  const resetAnnouncementForm = () => {
+    setAnnouncementDraft({ title: '', body: '', tag: '', date: '' });
+    setEditingAnnouncementId('');
+    setShowAnnouncementForm(false);
+  };
+
+  const handleEditAnnouncement = (item) => {
+    setAnnouncementDraft({
+      title: item.title,
+      body: item.body,
+      tag: item.tag || 'General',
+      date: item.date || '',
+    });
+    setEditingAnnouncementId(item.id);
+    setShowAnnouncementForm(true);
+  };
+
+  const handleSaveAnnouncement = async () => {
+    const title = announcementDraft.title.trim();
+    const body = announcementDraft.body.trim();
+    if (!title || !body) {
+      setAnnouncementError('Title and announcement text are required.');
+      return;
+    }
+    setAnnouncementError('');
+    const next = {
+      id: editingAnnouncementId || createId('ANN'),
+      title,
+      body,
+      tag: announcementDraft.tag.trim() || 'General',
+      date: announcementDraft.date.trim() || formatShortDate(),
+    };
+    const nextList = editingAnnouncementId
+      ? announcements.map((item) => (item.id === next.id ? next : item))
+      : [next, ...announcements];
+    setAnnouncements(nextList);
+    resetAnnouncementForm();
+    if (!isAuthRequired) {
+      writeLocalList(LOCAL_ANNOUNCEMENTS_KEY, nextList);
+      return;
+    }
+    try {
+      if (editingAnnouncementId) {
+        await updateAnnouncement(next.id, next);
+      } else {
+        await createAnnouncement(next);
+      }
+    } catch (error) {
+      console.error('Failed to save announcement', error);
+      setAnnouncementError('Unable to save the announcement.');
+    }
+  };
+
+  const handleDeleteAnnouncement = (id) => {
+    const nextList = announcements.filter((item) => item.id !== id);
+    setAnnouncements(nextList);
+    if (editingAnnouncementId === id) {
+      resetAnnouncementForm();
+    }
+    if (!isAuthRequired) {
+      writeLocalList(LOCAL_ANNOUNCEMENTS_KEY, nextList);
+      return;
+    }
+    deleteAnnouncement(id).catch((error) => {
+      console.error('Failed to delete announcement', error);
+      setAnnouncementError('Unable to delete the announcement.');
+    });
+  };
+
   const handleAddKnowledge = () => {
     const newId = createId('KB');
     setSelectedKnowledgeId(newId);
@@ -2087,15 +2362,58 @@ function AppIT() {
   const openWorkCount = workQueue.filter((item) => item.status !== 'Completed').length;
 
   const metrics = [
-    { label: 'Open tickets', value: openTicketCount, sub: 'Active incidents and requests', icon: Mail },
-    { label: 'Unassigned', value: unassignedCount, sub: 'Needs ownership', icon: PenLine },
-    { label: 'Approvals waiting', value: pendingApprovalsCount, sub: 'Needs review', icon: CheckCircle2 },
-    { label: 'Tasks in flight', value: openWorkCount, sub: 'Assigned to your queue', icon: PenLine },
+    {
+      label: 'Open tickets',
+      value: openTicketCount,
+      sub: 'Active incidents and requests',
+      icon: Mail,
+      ariaLabel: 'View open tickets',
+      onClick: () => {
+        setSearch('');
+        setTicketFilter('All');
+        handleNavigate('tickets');
+      },
+    },
+    {
+      label: 'Unassigned',
+      value: unassignedCount,
+      sub: 'Needs ownership',
+      icon: PenLine,
+      ariaLabel: 'View unassigned tickets',
+      onClick: () => {
+        setSearch('');
+        setTicketFilter('All');
+        handleNavigate('tickets');
+      },
+    },
+    {
+      label: 'Approvals waiting',
+      value: pendingApprovalsCount,
+      sub: 'Needs review',
+      icon: CheckCircle2,
+      ariaLabel: 'View approvals waiting',
+      onClick: () => {
+        setSearch('');
+        handleNavigate('approvals');
+      },
+    },
+    {
+      label: 'Tasks in flight',
+      value: openWorkCount,
+      sub: 'Assigned to your queue',
+      icon: PenLine,
+      ariaLabel: 'View tasks in flight',
+      onClick: () => {
+        setSearch('');
+        handleNavigate('my-work');
+      },
+    },
   ];
 
   const currentUserRole = TECHNICIANS.find((tech) => tech.name === currentUser)?.role || 'IT Support';
+  const isReadOnlyPortal = process.env.REACT_APP_APP_VARIANT === 'request';
 
-  if (!currentUser) {
+  if (isAuthRequired && !currentUser) {
     return (
       <div className="helpdesk-app auth">
         <div className="auth-shell">
@@ -2240,24 +2558,175 @@ function AppIT() {
                   </div>
                   <div className="hero-side">
                     <div className="card compact">
-                      <div className="section-title">Service status</div>
-                      {systemStatus.map((item) => (
-                        <div key={item.name} className="status-row">
-                          <span>{item.name}</span>
-                          <span className="status-pill service-status-pill">
-                            <span className="status-dot" style={{ background: item.color }} />
-                            {item.state}
-                          </span>
+                      <div className="list-inline" style={{ justifyContent: 'space-between', width: '100%' }}>
+                        <div className="section-title">Service status</div>
+                        {!isReadOnlyPortal && (
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={() => (showServiceStatusForm ? resetServiceStatusForm() : setShowServiceStatusForm(true))}
+                          >
+                            {showServiceStatusForm ? 'Close' : 'Manage'}
+                          </button>
+                        )}
+                      </div>
+                      {serviceStatusError && (
+                        <div className="form-alert error">
+                          <div className="form-alert-message">{serviceStatusError}</div>
                         </div>
-                      ))}
+                      )}
+                      {serviceStatus.length ? (
+                        serviceStatus.map((item) => (
+                          <div key={item.id} className="status-row">
+                            <span>{item.name}</span>
+                            <div className="list-inline">
+                              <span className="status-pill service-status-pill">
+                                <span className="status-dot" style={{ background: getServiceStatusColor(item.state) }} />
+                                {item.state}
+                              </span>
+                              {!isReadOnlyPortal && showServiceStatusForm && (
+                                <>
+                                  <button className="btn btn-ghost btn-small" type="button" onClick={() => handleEditServiceStatus(item)}>
+                                    Edit
+                                  </button>
+                                  <button className="btn btn-ghost btn-small" type="button" onClick={() => handleDeleteServiceStatus(item.id)}>
+                                    Remove
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="empty-state">
+                          <p>No service status updates yet.</p>
+                        </div>
+                      )}
+                      {showServiceStatusForm && !isReadOnlyPortal && (
+                        <div className="detail-card">
+                          <div className="detail-label">
+                            {editingServiceStatusId ? 'Edit service status' : 'Add service status'}
+                          </div>
+                          <label className="label">
+                            Service name
+                            <input
+                              className="input"
+                              value={serviceStatusDraft.name}
+                              onChange={(event) => setServiceStatusDraft((prev) => ({ ...prev, name: event.target.value }))}
+                              placeholder="e.g. Email and MFA"
+                            />
+                          </label>
+                          <label className="label">
+                            Status
+                            <select
+                              className="control-select"
+                              value={serviceStatusDraft.state}
+                              onChange={(event) => setServiceStatusDraft((prev) => ({ ...prev, state: event.target.value }))}
+                            >
+                              {SERVICE_STATUS_OPTIONS.map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="list-inline">
+                            <button className="btn btn-primary btn-small" type="button" onClick={handleSaveServiceStatus}>
+                              {editingServiceStatusId ? 'Save status' : 'Add status'}
+                            </button>
+                            <button className="btn btn-ghost btn-small" type="button" onClick={resetServiceStatusForm}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="card compact">
-                      <div className="section-title">Announcements</div>
-                      <div className="announcement-list">
-                        {announcements.map((item) => (
-                          <AnnouncementCard key={item.id} item={item} />
-                        ))}
+                      <div className="list-inline" style={{ justifyContent: 'space-between', width: '100%' }}>
+                        <div className="section-title">Announcements</div>
+                        {!isReadOnlyPortal && (
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={() => (showAnnouncementForm ? resetAnnouncementForm() : setShowAnnouncementForm(true))}
+                          >
+                            {showAnnouncementForm ? 'Close' : 'Manage'}
+                          </button>
+                        )}
                       </div>
+                      {announcementError && (
+                        <div className="form-alert error">
+                          <div className="form-alert-message">{announcementError}</div>
+                        </div>
+                      )}
+                      <div className="announcement-list">
+                        {announcements.length ? (
+                          announcements.map((item) => (
+                            <AnnouncementCard
+                              key={item.id}
+                              item={item}
+                              isReadOnly={isReadOnlyPortal || !showAnnouncementForm}
+                              onEdit={showAnnouncementForm ? handleEditAnnouncement : null}
+                              onRemove={showAnnouncementForm ? handleDeleteAnnouncement : null}
+                            />
+                          ))
+                        ) : (
+                          <div className="empty-state">
+                            <p>No announcements posted yet.</p>
+                          </div>
+                        )}
+                      </div>
+                      {showAnnouncementForm && !isReadOnlyPortal && (
+                        <div className="detail-card">
+                          <div className="detail-label">
+                            {editingAnnouncementId ? 'Edit announcement' : 'Add announcement'}
+                          </div>
+                          <label className="label">
+                            Title
+                            <input
+                              className="input"
+                              value={announcementDraft.title}
+                              onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, title: event.target.value }))}
+                              placeholder="e.g. VPN gateway maintenance"
+                            />
+                          </label>
+                          <label className="label">
+                            Tag
+                            <input
+                              className="input"
+                              value={announcementDraft.tag}
+                              onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, tag: event.target.value }))}
+                              placeholder="e.g. Network"
+                            />
+                          </label>
+                          <label className="label">
+                            Date
+                            <input
+                              className="input"
+                              value={announcementDraft.date}
+                              onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, date: event.target.value }))}
+                              placeholder={formatShortDate()}
+                            />
+                          </label>
+                          <label className="label">
+                            Message
+                            <textarea
+                              className="textarea"
+                              value={announcementDraft.body}
+                              onChange={(event) => setAnnouncementDraft((prev) => ({ ...prev, body: event.target.value }))}
+                              placeholder="Share the update details."
+                            />
+                          </label>
+                          <div className="list-inline">
+                            <button className="btn btn-primary btn-small" type="button" onClick={handleSaveAnnouncement}>
+                              {editingAnnouncementId ? 'Save announcement' : 'Add announcement'}
+                            </button>
+                            <button className="btn btn-ghost btn-small" type="button" onClick={resetAnnouncementForm}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </section>
