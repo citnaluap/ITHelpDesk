@@ -2,6 +2,8 @@ import { ensureTables, getSql } from './_db.js';
 import { ticketSeed } from './seedData.js';
 import { applyCors, requireSecretForExternal, validateSecret } from './_security.js';
 
+const EASTERN_TIME_ZONE = 'America/New_York';
+
 const parseBody = (req) => {
   if (!req.body) return null;
   if (typeof req.body === 'string') {
@@ -18,7 +20,13 @@ const formatCreatedLabel = (timestamp) => {
   if (!timestamp) return 'Just now';
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return 'Just now';
-  return date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return date.toLocaleString('en-US', {
+    timeZone: EASTERN_TIME_ZONE,
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 };
 
 const parseQuery = (req) => {

@@ -53,7 +53,7 @@ import {
 } from './api';
 import InlineTag from './components/InlineTag';
 import TicketDetail from './components/TicketDetail';
-import { toKebabCase } from './utils/format';
+import { formatTicketCreated, toKebabCase } from './utils/format';
 import { getTicketDescription, getTicketSummary } from './utils/tickets';
 
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
@@ -901,7 +901,7 @@ const TicketRow = ({ item, isActive, onSelect, onOpen }) => (
       </p>
     </div>
     <div className="ticket-side">
-      <span className="work-time">Created {item.created}</span>
+      <span className="work-time">Created {formatTicketCreated(item)}</span>
     </div>
   </button>
 );
@@ -919,7 +919,7 @@ const TicketPreviewCard = ({ ticket, onOpen, title = 'Ticket preview', compact =
             <span className={`status-pill status-${toKebabCase(ticket.status)}`}>{ticket.status}</span>
           </div>
           <div className="preview-meta">
-            <span>Created {ticket.created}</span>
+            <span>Created {formatTicketCreated(ticket)}</span>
             <span>Assignee: {ticket.assignee}</span>
           </div>
         </div>

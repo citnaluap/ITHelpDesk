@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import InlineTag from './InlineTag';
 import TicketEntry from './TicketEntry';
 import { buildSlaDisplay, formatDuration, getSlaPolicy, SLA_STATE_LABELS } from '../utils/sla';
-import { toKebabCase } from '../utils/format';
+import { formatEasternTime, formatTicketCreated, toKebabCase } from '../utils/format';
 import { getTicketDescription } from '../utils/tickets';
 import { createTask, fetchTasks, updateTask } from '../api';
 
@@ -105,7 +105,7 @@ function TicketDetail({
     if (!activeTicket) return;
     const text = noteDraft.trim();
     if (!text) return;
-    const time = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const time = formatEasternTime(Date.now());
     const entry = { id: `entry-${Date.now()}`, type, author: currentUser, time, text };
     onAddEntry(activeTicket.id, entry);
     setNoteDraft('');
@@ -239,7 +239,7 @@ function TicketDetail({
             <div className="detail-label">Device / Asset</div>
             <div className="detail-value">{activeTicket.device}</div>
             <div className="detail-label">Created</div>
-            <div className="detail-value">{activeTicket.created}</div>
+            <div className="detail-value">{formatTicketCreated(activeTicket)}</div>
           </div>
           <div className="detail-card">
             <div className="detail-label">Intake</div>
