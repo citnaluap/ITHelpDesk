@@ -27,6 +27,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import employeeDirectory from './data/employeeDirectory.json';
+import employeePhotos from './data/employeePhotos';
 import { TECHNICIANS } from './data/technicians';
 import {
   createAutomationRule,
@@ -70,6 +71,7 @@ const STATUS_OPTIONS = ['New', 'In Review', 'In Progress', 'Waiting on User', 'R
 const SERVICE_STATUS_OPTIONS = ['Operational', 'Degraded', 'Investigating', 'Maintenance', 'Outage'];
 const TICKET_PAGE_SIZE = 12;
 const APPROVAL_PAGE_SIZE = 8;
+const EMPLOYEE_DIRECTORY_PAGE_SIZE = 18;
 const ASSIGNEES = [
   'Unassigned',
   'Paul Antic',
@@ -90,6 +92,7 @@ const navItems = [
   { id: 'approvals', label: 'Approvals', icon: CheckCircle2, targetId: 'approvals' },
   { id: 'service-catalog', label: 'Service Catalog', icon: LayoutGrid, targetId: 'service-catalog' },
   { id: 'knowledge', label: 'Knowledge Base', icon: BookOpen, targetId: 'knowledge' },
+  { id: 'directory', label: 'Directory', icon: Users, targetId: 'directory' },
   { id: 'problems', label: 'Problems', icon: AlertTriangle, targetId: 'problems' },
   { id: 'reports', label: 'Reports', icon: BarChart3, targetId: 'reports' },
   { id: 'surveys', label: 'Surveys', icon: TrendingUp, targetId: 'surveys' },
@@ -710,6 +713,25 @@ const knowledgeArticlesSeed = [
   },
 ];
 
+const KNOWLEDGE_CATEGORY_STYLES = {
+  Applications: { background: '#e0f2fe', color: '#075985', borderColor: '#7dd3fc' },
+  Compliance: { background: '#fef3c7', color: '#92400e', borderColor: '#fcd34d' },
+  Security: { background: '#fee2e2', color: '#b91c1c', borderColor: '#fecaca' },
+  Email: { background: '#dcfce7', color: '#166534', borderColor: '#86efac' },
+  Mobile: { background: '#cffafe', color: '#0e7490', borderColor: '#67e8f9' },
+  Onboarding: { background: '#ffedd5', color: '#9a3412', borderColor: '#fdba74' },
+  Network: { background: '#dbeafe', color: '#1d4ed8', borderColor: '#93c5fd' },
+  Telecom: { background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' },
+  'Digital Signage': { background: '#ecfccb', color: '#365314', borderColor: '#bef264' },
+  Printing: { background: '#fee2e2', color: '#991b1b', borderColor: '#fecaca' },
+  Backup: { background: '#fef9c3', color: '#854d0e', borderColor: '#fde047' },
+  'Web Filter': { background: '#f8fafc', color: '#475569', borderColor: '#cbd5e1' },
+  'Access Control': { background: '#ccfbf1', color: '#115e59', borderColor: '#5eead4' },
+  General: { background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' },
+};
+
+const getKnowledgeCategoryStyle = (category) => KNOWLEDGE_CATEGORY_STYLES[category] || KNOWLEDGE_CATEGORY_STYLES.General;
+
 const problemRecords = [
   { id: 'PRB-19', title: 'Recurring VPN disconnects', status: 'Root cause analysis', impact: 'Multiple teams', linked: 6 },
   { id: 'PRB-22', title: 'Email delays with vendor relay', status: 'Known error', impact: 'Org-wide', linked: 3 },
@@ -725,9 +747,62 @@ const releaseRecords = [
 const RELEASE_STATUS_OPTIONS = ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Canceled'];
 
 const projectRecords = [
-  { id: 'PRJ-8', title: 'Remote worker hardening', status: 'On track', owner: 'Erik Lofgren', progress: 62 },
-  { id: 'PRJ-11', title: 'Asset lifecycle refresh', status: 'At risk', owner: 'Paul Antic', progress: 38 },
-  { id: 'PRJ-14', title: 'Service catalog expansion', status: 'On track', owner: 'Geoffrey Heller', progress: 71 },
+  {
+    id: 'PRJ-8',
+    title: 'Remote worker hardening',
+    status: 'On track',
+    owner: 'Erik Lofgren',
+    progress: 60,
+    summary: 'Baseline endpoint hardening and conditional access policies for remote staff.',
+    targetDate: 'Oct 18',
+    team: 'Security + End User Computing',
+    nextMilestone: 'Conditional access pilot complete',
+    tasks: [
+      { id: 'PRJ-8-1', title: 'Inventory device posture policies', done: true },
+      { id: 'PRJ-8-2', title: 'Pilot conditional access for VPN', done: true },
+      { id: 'PRJ-8-3', title: 'Enable MFA session controls', done: false },
+      { id: 'PRJ-8-4', title: 'Publish remote work checklist', done: false },
+      { id: 'PRJ-8-5', title: 'Enable disk encryption reporting', done: true },
+    ],
+  },
+  {
+    id: 'PRJ-11',
+    title: 'Asset lifecycle refresh',
+    status: 'At risk',
+    owner: 'Paul Antic',
+    progress: 40,
+    summary: 'Replace aging laptops and standardize peripherals across field teams.',
+    targetDate: 'Nov 8',
+    team: 'IT Operations',
+    nextMilestone: 'Wave 2 purchase order',
+    tasks: [
+      { id: 'PRJ-11-1', title: 'Compile aging inventory list', done: true },
+      { id: 'PRJ-11-2', title: 'Finalize hardware standards', done: false },
+      { id: 'PRJ-11-3', title: 'Approve refresh budget', done: false },
+      { id: 'PRJ-11-4', title: 'Coordinate swap clinics', done: false },
+      { id: 'PRJ-11-5', title: 'Stage new docking stations', done: true },
+    ],
+  },
+  {
+    id: 'PRJ-14',
+    title: 'Service catalog expansion',
+    status: 'On track',
+    owner: 'Geoffrey Heller',
+    progress: 71,
+    summary: 'Expand self-service requests to cover software, access, and onboarding needs.',
+    targetDate: 'Sep 30',
+    team: 'IT Service Management',
+    nextMilestone: 'Publish new catalog categories',
+    tasks: [
+      { id: 'PRJ-14-1', title: 'Define new request categories', done: true },
+      { id: 'PRJ-14-2', title: 'Draft approval workflows', done: true },
+      { id: 'PRJ-14-3', title: 'Review SLAs with stakeholders', done: true },
+      { id: 'PRJ-14-4', title: 'Update request intake forms', done: true },
+      { id: 'PRJ-14-5', title: 'Pilot with HR onboarding', done: true },
+      { id: 'PRJ-14-6', title: 'Train service desk staff', done: false },
+      { id: 'PRJ-14-7', title: 'Launch catalog update', done: false },
+    ],
+  },
 ];
 const PROJECT_STATUS_OPTIONS = ['Planned', 'On track', 'At risk', 'In Progress', 'Blocked', 'Completed'];
 
@@ -739,11 +814,92 @@ const assetInventory = [
 ];
 
 const cmdbItems = [
-  { id: 'CI-402', name: 'Exchange Online', type: 'Cloud service', status: 'Operational', owner: 'Messaging' },
-  { id: 'CI-418', name: 'VPN Gateway - East', type: 'Network appliance', status: 'Degraded', owner: 'Network' },
-  { id: 'CI-431', name: 'File Server FS-02', type: 'Server', status: 'Operational', owner: 'Infrastructure' },
-  { id: 'CI-447', name: 'Print Server PS-01', type: 'Server', status: 'Investigating', owner: 'Workplace' },
+  {
+    id: 'CI-402',
+    name: 'Exchange Online',
+    type: 'Cloud service',
+    status: 'Operational',
+    owner: 'Messaging',
+    environment: 'Production',
+    criticality: 'High',
+    location: 'Microsoft 365',
+    serviceTier: 'Tier 1',
+    supportWindow: '24x7',
+    lastAudit: 'Aug 28',
+    description: 'Primary email and calendar platform for all staff accounts.',
+    documentation: 'https://learn.microsoft.com/microsoft-365/enterprise/',
+    dependencies: ['Entra ID', 'Azure AD Connect', 'Defender for Office 365'],
+    tasks: [
+      { id: 'CI-402-1', title: 'Review transport rules and alerts', done: true },
+      { id: 'CI-402-2', title: 'Validate MFA policy coverage', done: false },
+      { id: 'CI-402-3', title: 'Confirm spam filter tuning', done: true },
+    ],
+  },
+  {
+    id: 'CI-418',
+    name: 'VPN Gateway - East',
+    type: 'Network appliance',
+    status: 'Degraded',
+    owner: 'Network',
+    environment: 'Production',
+    criticality: 'High',
+    location: 'Ashburn DC',
+    serviceTier: 'Tier 1',
+    supportWindow: '24x7',
+    lastAudit: 'Aug 22',
+    description: 'Primary remote access gateway for East region users.',
+    documentation: 'https://intranet/it/network/vpn-gateway',
+    dependencies: ['MFA', 'ISP - Carrier 1', 'Firewall Cluster'],
+    tasks: [
+      { id: 'CI-418-1', title: 'Check tunnel latency and packet loss', done: true },
+      { id: 'CI-418-2', title: 'Rotate shared secrets', done: false },
+      { id: 'CI-418-3', title: 'Apply firmware hotfix', done: false },
+    ],
+  },
+  {
+    id: 'CI-431',
+    name: 'File Server FS-02',
+    type: 'Server',
+    status: 'Operational',
+    owner: 'Infrastructure',
+    environment: 'Production',
+    criticality: 'Medium',
+    location: 'HQ Data Center',
+    serviceTier: 'Tier 2',
+    supportWindow: 'Business hours',
+    lastAudit: 'Aug 15',
+    description: 'Department file shares and archival storage.',
+    documentation: 'https://intranet/it/storage/fs-02',
+    dependencies: ['Backup Vault', 'AD DS', 'VMware Cluster'],
+    tasks: [
+      { id: 'CI-431-1', title: 'Verify backup success', done: true },
+      { id: 'CI-431-2', title: 'Review disk capacity alerts', done: true },
+      { id: 'CI-431-3', title: 'Test file restore sample', done: false },
+    ],
+  },
+  {
+    id: 'CI-447',
+    name: 'Print Server PS-01',
+    type: 'Server',
+    status: 'Investigating',
+    owner: 'Workplace',
+    environment: 'Production',
+    criticality: 'Low',
+    location: 'HQ Data Center',
+    serviceTier: 'Tier 3',
+    supportWindow: 'Business hours',
+    lastAudit: 'Aug 10',
+    description: 'Centralized print queue and driver management.',
+    documentation: 'https://intranet/it/workplace/print-server',
+    dependencies: ['AD DS', 'Print Fleet'],
+    tasks: [
+      { id: 'CI-447-1', title: 'Clear stalled queue jobs', done: true },
+      { id: 'CI-447-2', title: 'Restart print spooler service', done: true },
+      { id: 'CI-447-3', title: 'Validate driver update policy', done: false },
+    ],
+  },
 ];
+const CMDB_STATUS_OPTIONS = ['Operational', 'Degraded', 'Investigating', 'Maintenance', 'Retired'];
 
 const csatSurveys = [
   { id: 'CSAT-09', title: 'Ticket closure survey', status: 'Active', responses: 84, score: '4.6/5' },
@@ -938,6 +1094,20 @@ const ApprovalRow = ({ item, onDecision }) => {
   );
 };
 
+const WizardSteps = ({ steps, currentStep }) => (
+  <div className="wizard-steps">
+    {steps.map((step, index) => {
+      const stateClass = index === currentStep ? ' active' : index < currentStep ? ' complete' : '';
+      return (
+        <div key={step} className={`wizard-step${stateClass}`}>
+          <span className="wizard-step-index">{index + 1}</span>
+          <span className="wizard-step-label">{step}</span>
+        </div>
+      );
+    })}
+  </div>
+);
+
 const TicketRow = ({ item, isActive, onSelect, onOpen }) => (
   <button
     className={`ticket-row${isActive ? ' active' : ''}`}
@@ -1092,6 +1262,169 @@ const buildAssetList = (record) => {
   return fields.filter((item) => item.value);
 };
 
+const getProjectTasks = (project) => (Array.isArray(project?.tasks) ? project.tasks : []);
+
+const getProjectProgress = (project) => {
+  const tasks = getProjectTasks(project);
+  if (!tasks.length) return project.progress || 0;
+  const completed = tasks.filter((task) => task.done).length;
+  return Math.round((completed / tasks.length) * 100);
+};
+
+const EMPLOYEE_PHOTO_BASE = `${process.env.PUBLIC_URL || ''}/employee-pictures`;
+
+const normalizeEmployeeKey = (value) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const buildEmployeePhotoLookup = (files) => {
+  const orderedFiles = [...files].sort((a, b) => {
+    const aBase = a.replace(/\.[^.]+$/, '');
+    const bBase = b.replace(/\.[^.]+$/, '');
+    const aScore = /\(\d+\)$/.test(aBase) || /\d$/.test(aBase) ? 1 : 0;
+    const bScore = /\(\d+\)$/.test(bBase) || /\d$/.test(bBase) ? 1 : 0;
+    if (aScore !== bScore) return aScore - bScore;
+    return aBase.localeCompare(bBase);
+  });
+  const map = new Map();
+  orderedFiles.forEach((file) => {
+    const baseName = file.replace(/\.[^.]+$/, '');
+    const candidates = [
+      baseName,
+      baseName.replace(/\s*\(\d+\)\s*$/, ''),
+      baseName.replace(/\d+$/, ''),
+    ];
+    candidates.forEach((candidate) => {
+      const key = normalizeEmployeeKey(candidate);
+      if (key && !map.has(key)) {
+        map.set(key, file);
+      }
+    });
+  });
+  return map;
+};
+
+const getEmployeePhotoFile = (record, lookup) => {
+  if (!record) return '';
+  const firstName = (record.firstName || '').trim();
+  const lastName = (record.lastName || '').trim();
+  const firstInitial = firstName ? firstName[0] : '';
+  const candidates = [
+    `${firstName} ${lastName}`.trim(),
+    `${lastName} ${firstName}`.trim(),
+    `${firstInitial} ${lastName}`.trim(),
+    `${lastName} ${firstInitial}`.trim(),
+  ];
+  for (const candidate of candidates) {
+    const key = normalizeEmployeeKey(candidate);
+    if (key && lookup.has(key)) {
+      return lookup.get(key);
+    }
+  }
+  return '';
+};
+
+const getEmployeeInitials = (name) =>
+  (name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join('');
+
+const EmployeeAvatar = ({ name, photoFile }) => {
+  const [hasError, setHasError] = useState(false);
+  const initials = getEmployeeInitials(name);
+  const photoSrc = photoFile ? `${EMPLOYEE_PHOTO_BASE}/${encodeURIComponent(photoFile)}` : '';
+
+  if (!photoFile || hasError) {
+    return (
+      <div className="employee-avatar fallback" aria-label={name}>
+        {initials || '??'}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      className="employee-avatar"
+      src={photoSrc}
+      alt={name}
+      loading="lazy"
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
+const EmployeeCard = ({ record, photoFile }) => {
+  const name = `${record.firstName || ''} ${record.lastName || ''}`.trim() || 'Employee';
+  const assets = buildAssetList(record);
+  const tags = [record.company, record.department, record.location].filter(Boolean);
+
+  return (
+    <article className="employee-card">
+      <EmployeeAvatar name={name} photoFile={photoFile} />
+      <div className="employee-card-body">
+        <div className="employee-card-header">
+          <div>
+            <div className="employee-name">{name}</div>
+            <div className="employee-role">{record.jobTitle || 'Role not listed'}</div>
+          </div>
+          <div className="employee-tags">
+            {record.employeeId && <InlineTag className="mono">{record.employeeId}</InlineTag>}
+            {tags.map((tag, index) => (
+              <InlineTag key={`${tag}-${index}`}>{tag}</InlineTag>
+            ))}
+          </div>
+        </div>
+        <div className="employee-info-grid">
+          <div>
+            <div className="detail-label">Email</div>
+            {record.email ? (
+              <a className="employee-link" href={`mailto:${record.email}`}>
+                {record.email}
+              </a>
+            ) : (
+              <div className="detail-value">Not listed</div>
+            )}
+          </div>
+          <div>
+            <div className="detail-label">Mobile</div>
+            {record.mobilePhone ? (
+              <a className="employee-link" href={`tel:${record.mobilePhone}`}>
+                {record.mobilePhone}
+              </a>
+            ) : (
+              <div className="detail-value">Not listed</div>
+            )}
+          </div>
+          <div>
+            <div className="detail-label">Supervisor</div>
+            <div className="detail-value">{record.supervisor || 'Not listed'}</div>
+          </div>
+          <div>
+            <div className="detail-label">Start date</div>
+            <div className="detail-value">{record.startDate || 'Not listed'}</div>
+          </div>
+        </div>
+        <div className="employee-assets">
+          <div className="detail-label">Assigned assets</div>
+          {assets.length ? (
+            <div className="asset-grid">
+              {assets.map((asset) => (
+                <div key={asset.label} className="asset-chip">
+                  <span>{asset.label}</span>
+                  <strong>{asset.value}</strong>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="detail-value employee-empty">No assets listed.</div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+};
+
 function AppIT() {
   const isAuthRequired = process.env.NODE_ENV === 'production';
   const defaultDevUser = isAuthRequired ? '' : (TECHNICIANS[0]?.name || '');
@@ -1110,11 +1443,13 @@ function AppIT() {
   const [approvalsError, setApprovalsError] = useState('');
   const [ticketPage, setTicketPage] = useState(0);
   const [approvalPage, setApprovalPage] = useState(0);
+  const [directoryPage, setDirectoryPage] = useState(0);
   const [currentUser, setCurrentUser] = useState(defaultDevUser);
   const [selectedUser, setSelectedUser] = useState(defaultDevUser);
   const [reportRange, setReportRange] = useState(reportRanges[0]);
   const [automationRules, setAutomationRules] = useState([]);
   const [catalogActiveId, setCatalogActiveId] = useState('');
+  const [catalogStep, setCatalogStep] = useState(0);
   const [catalogItems, setCatalogItems] = useState(() => serviceCatalog);
   const [catalogItemDraft, setCatalogItemDraft] = useState({
     name: '',
@@ -1135,6 +1470,24 @@ function AppIT() {
   });
   const [changeError, setChangeError] = useState('');
   const [showChangeForm, setShowChangeForm] = useState(false);
+  const [cmdbRecords, setCmdbRecords] = useState(() => cmdbItems);
+  const [cmdbDraft, setCmdbDraft] = useState({
+    name: '',
+    type: '',
+    owner: '',
+    status: CMDB_STATUS_OPTIONS[0],
+    environment: 'Production',
+    criticality: 'Medium',
+    location: '',
+    serviceTier: 'Tier 2',
+    supportWindow: 'Business hours',
+    description: '',
+    documentation: '',
+    dependencies: '',
+  });
+  const [cmdbError, setCmdbError] = useState('');
+  const [showCmdbForm, setShowCmdbForm] = useState(false);
+  const [openCmdbId, setOpenCmdbId] = useState('');
   const [catalogDraft, setCatalogDraft] = useState({
     employeeName: '',
     employeeEmail: '',
@@ -1188,6 +1541,7 @@ function AppIT() {
   });
   const [projectError, setProjectError] = useState('');
   const [showProjectForm, setShowProjectForm] = useState(false);
+  const [openProjectId, setOpenProjectId] = useState('');
   const [problems, setProblems] = useState(() => problemRecords);
   const [problemDraft, setProblemDraft] = useState({
     title: '',
@@ -1228,6 +1582,80 @@ function AppIT() {
     });
     return map;
   }, []);
+  const employeePhotoLookup = useMemo(() => buildEmployeePhotoLookup(employeePhotos), []);
+  const directorySearchTerm = search.trim().toLowerCase();
+  const directoryTotals = useMemo(() => {
+    const departments = new Set();
+    const locations = new Set();
+    employeeDirectory.forEach((record) => {
+      if (record.department) departments.add(record.department);
+      if (record.location) locations.add(record.location);
+    });
+    return { total: employeeDirectory.length, departments: departments.size, locations: locations.size };
+  }, []);
+  const directoryRecords = useMemo(() => {
+    const records = employeeDirectory.filter((record) => {
+      if (!directorySearchTerm) return true;
+      const haystack = [
+        record.firstName,
+        record.lastName,
+        record.email,
+        record.department,
+        record.location,
+        record.jobTitle,
+        record.company,
+        record.supervisor,
+        record.employeeId,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(directorySearchTerm);
+    });
+    return records.sort((a, b) => {
+      const lastCompare = (a.lastName || '').localeCompare(b.lastName || '');
+      if (lastCompare !== 0) return lastCompare;
+      return (a.firstName || '').localeCompare(b.firstName || '');
+    });
+  }, [directorySearchTerm]);
+  const directoryPageRecords = useMemo(() => {
+    const start = directoryPage * EMPLOYEE_DIRECTORY_PAGE_SIZE;
+    return directoryRecords.slice(start, start + EMPLOYEE_DIRECTORY_PAGE_SIZE);
+  }, [directoryRecords, directoryPage]);
+  const knowledgeSearchTerm = search.trim().toLowerCase();
+  const knowledgeGroups = useMemo(() => {
+    const grouped = new Map();
+    knowledgeArticles.forEach((article) => {
+      if (knowledgeSearchTerm) {
+        const haystack = [article.title, article.summary, article.category, article.audience]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(knowledgeSearchTerm)) return;
+      }
+      const category = article.category || 'General';
+      if (!grouped.has(category)) grouped.set(category, []);
+      grouped.get(category).push(article);
+    });
+    return Array.from(grouped.entries())
+      .map(([category, articles]) => ({
+        category,
+        articles: articles.slice().sort((a, b) => (a.title || '').localeCompare(b.title || '')),
+      }))
+      .sort((a, b) => a.category.localeCompare(b.category));
+  }, [knowledgeArticles, knowledgeSearchTerm]);
+  const cmdbSearchTerm = search.trim().toLowerCase();
+  const filteredCmdbRecords = useMemo(() => {
+    const records = cmdbRecords.filter((item) => {
+      if (!cmdbSearchTerm) return true;
+      const haystack = [item.id, item.name, item.type, item.status, item.owner, item.location, item.environment, item.criticality]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(cmdbSearchTerm);
+    });
+    return records.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [cmdbRecords, cmdbSearchTerm]);
 
   const filteredWorkQueue = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -1488,6 +1916,12 @@ function AppIT() {
   useEffect(() => {
     if (activeSection === 'approvals') {
       setApprovalPage(0);
+    }
+  }, [activeSection, search]);
+
+  useEffect(() => {
+    if (activeSection === 'directory') {
+      setDirectoryPage(0);
     }
   }, [activeSection, search]);
 
@@ -1780,6 +2214,91 @@ function AppIT() {
     ]);
   };
 
+  const handleToggleCmdbItem = (itemId) => {
+    setOpenCmdbId((prev) => (prev === itemId ? '' : itemId));
+  };
+
+  const handleUpdateCmdbItem = (itemId, updates) => {
+    setCmdbRecords((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
+  };
+
+  const handleToggleCmdbTask = (itemId, taskId) => {
+    setCmdbRecords((prev) =>
+      prev.map((item) => {
+        if (item.id !== itemId) return item;
+        const tasks = Array.isArray(item.tasks) ? item.tasks : [];
+        const updatedTasks = tasks.map((task) => (task.id === taskId ? { ...task, done: !task.done } : task));
+        return { ...item, tasks: updatedTasks };
+      }),
+    );
+  };
+
+  const handleAddCmdbItem = () => {
+    const name = cmdbDraft.name.trim();
+    const type = cmdbDraft.type.trim();
+    const owner = cmdbDraft.owner.trim();
+    if (!name || !type || !owner) {
+      setCmdbError('Name, type, and owner are required.');
+      return;
+    }
+    const newItem = {
+      id: createId('CI'),
+      name,
+      type,
+      owner,
+      status: cmdbDraft.status,
+      environment: cmdbDraft.environment.trim() || 'Production',
+      criticality: cmdbDraft.criticality.trim() || 'Medium',
+      location: cmdbDraft.location.trim() || 'Not specified',
+      serviceTier: cmdbDraft.serviceTier.trim() || 'Tier 2',
+      supportWindow: cmdbDraft.supportWindow.trim() || 'Business hours',
+      description: cmdbDraft.description.trim(),
+      documentation: cmdbDraft.documentation.trim(),
+      dependencies: cmdbDraft.dependencies
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      tasks: [],
+      lastAudit: 'Today',
+    };
+    setCmdbRecords((prev) => [newItem, ...prev]);
+    setCmdbDraft({
+      name: '',
+      type: '',
+      owner: '',
+      status: CMDB_STATUS_OPTIONS[0],
+      environment: 'Production',
+      criticality: 'Medium',
+      location: '',
+      serviceTier: 'Tier 2',
+      supportWindow: 'Business hours',
+      description: '',
+      documentation: '',
+      dependencies: '',
+    });
+    setCmdbError('');
+    setShowCmdbForm(false);
+    setOpenCmdbId(newItem.id);
+  };
+
+  const handleToggleProject = (projectId) => {
+    setOpenProjectId((prev) => (prev === projectId ? '' : projectId));
+  };
+
+  const handleToggleProjectTask = (projectId, taskId) => {
+    setProjects((prev) =>
+      prev.map((project) => {
+        if (project.id !== projectId) return project;
+        const tasks = getProjectTasks(project);
+        if (!tasks.length) return project;
+        const updatedTasks = tasks.map((task) =>
+          task.id === taskId ? { ...task, done: !task.done } : task,
+        );
+        return { ...project, tasks: updatedTasks };
+      }),
+    );
+  };
+
   const handleAddProject = async () => {
     const title = projectDraft.title.trim();
     const owner = projectDraft.owner.trim();
@@ -1875,6 +2394,19 @@ function AppIT() {
   const handleOpenCatalog = (id) => {
     setCatalogActiveId(id);
     setCatalogError('');
+    setCatalogStep(0);
+  };
+
+  const handleCatalogStepChange = (nextStep) => {
+    setCatalogError('');
+    setCatalogStep(nextStep);
+  };
+
+  const handleCloseCatalog = () => {
+    setCatalogStep(0);
+    setCatalogActiveId('');
+    setCatalogError('');
+    setCatalogStep(0);
   };
 
   const handleAddCatalogItem = async () => {
@@ -2117,6 +2649,7 @@ function AppIT() {
         softwareJustification: '',
         softwareCostCenter: '',
       });
+      setCatalogStep(0);
       setCatalogActiveId('');
     } catch (error) {
       console.error('Failed to create onboarding ticket', error);
@@ -3014,378 +3547,707 @@ function AppIT() {
                     </div>
                   </>
                 )}
-                {catalogActiveId === 'CAT-101' && (
-                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
-                    <div className="detail-label">New employee onboarding intake</div>
-                    <label className="label">
-                      Employee name
-                      <input
-                        className="input"
-                        value={catalogDraft.employeeName}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeName: event.target.value }))}
-                        placeholder="e.g. Jamie Rivera"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Employee email
-                      <input
-                        className="input"
-                        type="email"
-                        value={catalogDraft.employeeEmail}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeEmail: event.target.value }))}
-                        placeholder="e.g. jamier@udservices.org"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Start date
-                      <input
-                        className="input"
-                        value={catalogDraft.startDate}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, startDate: event.target.value }))}
-                        placeholder="e.g. 2026-02-01"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Department
-                      <input
-                        className="input"
-                        value={catalogDraft.department}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
-                        placeholder="e.g. HCBS"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Manager
-                      <input
-                        className="input"
-                        value={catalogDraft.manager}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, manager: event.target.value }))}
-                        placeholder="e.g. Chris Moore"
-                      />
-                    </label>
-                    <label className="label">
-                      Role/Title
-                      <input
-                        className="input"
-                        value={catalogDraft.role}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, role: event.target.value }))}
-                        placeholder="e.g. Program Specialist"
-                      />
-                    </label>
-                    <label className="label">
-                      Location
-                      <input
-                        className="input"
-                        value={catalogDraft.location}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, location: event.target.value }))}
-                        placeholder="e.g. Corporate Blvd"
-                      />
-                    </label>
-                    <label className="label">
-                      Device needs
-                      <input
-                        className="input"
-                        value={catalogDraft.deviceNeeds}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, deviceNeeds: event.target.value }))}
-                        placeholder="e.g. Laptop + docking station"
-                      />
-                    </label>
-                    <label className="label">
-                      Access needs
-                      <input
-                        className="input"
-                        value={catalogDraft.accessNeeds}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, accessNeeds: event.target.value }))}
-                        placeholder="e.g. Teams, Salesforce"
-                      />
-                    </label>
-                    <label className="label">
-                      Notes
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.notes}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                        placeholder="Anything else we should know."
-                      />
-                    </label>
-                    {catalogError && <div className="form-alert error">{catalogError}</div>}
-                    <div className="list-inline">
-                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
-                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-small"
-                        type="button"
-                        onClick={() => setCatalogActiveId('')}
-                        disabled={catalogSubmitting}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-                {catalogActiveId === 'CAT-203' && (
-                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
-                    <div className="detail-label">VPN access request</div>
-                    <label className="label">
-                      Requester name
-                      <input
-                        className="input"
-                        value={catalogDraft.vpnUser}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnUser: event.target.value }))}
-                        placeholder="e.g. Renee Alston"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Requester email
-                      <input
-                        className="input"
-                        type="email"
-                        value={catalogDraft.vpnEmail}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEmail: event.target.value }))}
-                        placeholder="e.g. renee@udservices.org"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Reason for access
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.vpnReason}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnReason: event.target.value }))}
-                        placeholder="Describe the remote access need."
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Start date
-                      <input
-                        className="input"
-                        value={catalogDraft.vpnStartDate}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnStartDate: event.target.value }))}
-                        placeholder="e.g. 2026-02-01"
-                      />
-                    </label>
-                    <label className="label">
-                      End date
-                      <input
-                        className="input"
-                        value={catalogDraft.vpnEndDate}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEndDate: event.target.value }))}
-                        placeholder="Leave blank if ongoing"
-                      />
-                    </label>
-                    <label className="label">
-                      Department (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.department}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
-                        placeholder="e.g. HCBS"
-                      />
-                    </label>
-                    <label className="label">
-                      Notes
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.notes}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                        placeholder="Anything else we should know."
-                      />
-                    </label>
-                    {catalogError && <div className="form-alert error">{catalogError}</div>}
-                    <div className="list-inline">
-                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
-                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-small"
-                        type="button"
-                        onClick={() => setCatalogActiveId('')}
-                        disabled={catalogSubmitting}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-                {catalogActiveId === 'CAT-312' && (
-                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
-                    <div className="detail-label">Laptop replacement request</div>
-                    <label className="label">
-                      Requester name
-                      <input
-                        className="input"
-                        value={catalogDraft.laptopUser}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopUser: event.target.value }))}
-                        placeholder="e.g. Jamie Rivera"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Requester email
-                      <input
-                        className="input"
-                        type="email"
-                        value={catalogDraft.laptopEmail}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopEmail: event.target.value }))}
-                        placeholder="e.g. jamier@udservices.org"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Issue summary
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.laptopIssue}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopIssue: event.target.value }))}
-                        placeholder="Describe the performance or hardware issue."
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Asset tag (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.laptopAssetTag}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopAssetTag: event.target.value }))}
-                        placeholder="e.g. LAPTOP418"
-                      />
-                    </label>
-                    <label className="label">
-                      Needed by (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.laptopNeededBy}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopNeededBy: event.target.value }))}
-                        placeholder="e.g. Next Friday"
-                      />
-                    </label>
-                    <label className="label">
-                      Department (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.department}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
-                        placeholder="e.g. HCBS"
-                      />
-                    </label>
-                    <label className="label">
-                      Notes
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.notes}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                        placeholder="Anything else we should know."
-                      />
-                    </label>
-                    {catalogError && <div className="form-alert error">{catalogError}</div>}
-                    <div className="list-inline">
-                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
-                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-small"
-                        type="button"
-                        onClick={() => setCatalogActiveId('')}
-                        disabled={catalogSubmitting}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-                {catalogActiveId === 'CAT-404' && (
-                  <form className="detail-card" onSubmit={handleCatalogSubmit}>
-                    <div className="detail-label">Software install request</div>
-                    <label className="label">
-                      Requester name
-                      <input
-                        className="input"
-                        value={catalogDraft.softwareUser}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareUser: event.target.value }))}
-                        placeholder="e.g. Paul Antic"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Requester email
-                      <input
-                        className="input"
-                        type="email"
-                        value={catalogDraft.softwareEmail}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareEmail: event.target.value }))}
-                        placeholder="e.g. paul@udservices.org"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Software title
-                      <input
-                        className="input"
-                        value={catalogDraft.softwareTitle}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareTitle: event.target.value }))}
-                        placeholder="e.g. Adobe Acrobat Pro"
-                        required
-                      />
-                    </label>
-                    <label className="label">
-                      Justification
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.softwareJustification}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareJustification: event.target.value }))}
-                        placeholder="Describe why this is needed."
-                      />
-                    </label>
-                    <label className="label">
-                      Cost center (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.softwareCostCenter}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareCostCenter: event.target.value }))}
-                        placeholder="e.g. HCBS-112"
-                      />
-                    </label>
-                    <label className="label">
-                      Department (optional)
-                      <input
-                        className="input"
-                        value={catalogDraft.department}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
-                        placeholder="e.g. Resource Center"
-                      />
-                    </label>
-                    <label className="label">
-                      Notes
-                      <textarea
-                        className="textarea"
-                        value={catalogDraft.notes}
-                        onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
-                        placeholder="Anything else we should know."
-                      />
-                    </label>
-                    {catalogError && <div className="form-alert error">{catalogError}</div>}
-                    <div className="list-inline">
-                      <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
-                        {catalogSubmitting ? 'Submitting...' : 'Submit request'}
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-small"
-                        type="button"
-                        onClick={() => setCatalogActiveId('')}
-                        disabled={catalogSubmitting}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
+                {catalogActiveId === 'CAT-101' &&
+                  (() => {
+                    const steps = ['Employee basics', 'Role & location', 'Equipment & access', 'Review'];
+                    const isLastStep = catalogStep === steps.length - 1;
+                    const canProceed =
+                      catalogStep === 0
+                        ? Boolean(
+                            catalogDraft.employeeName.trim() &&
+                              catalogDraft.employeeEmail.trim() &&
+                              catalogDraft.startDate.trim() &&
+                              catalogDraft.department.trim(),
+                          )
+                        : true;
+
+                    return (
+                      <form className="detail-card wizard-form" onSubmit={handleCatalogSubmit}>
+                        <div className="wizard-header">
+                          <div>
+                            <div className="detail-label">New employee onboarding</div>
+                            <div className="wizard-title">New employee onboarding intake</div>
+                            <div className="wizard-step-count">
+                              Step {catalogStep + 1} of {steps.length} · {steps[catalogStep]}
+                            </div>
+                          </div>
+                        </div>
+                        <WizardSteps steps={steps} currentStep={catalogStep} />
+                        <div className="wizard-body">
+                          {catalogStep === 0 && (
+                            <>
+                              <label className="label">
+                                Employee name
+                                <input
+                                  className="input"
+                                  value={catalogDraft.employeeName}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeName: event.target.value }))}
+                                  placeholder="e.g. Jamie Rivera"
+                                />
+                              </label>
+                              <label className="label">
+                                Employee email
+                                <input
+                                  className="input"
+                                  type="email"
+                                  value={catalogDraft.employeeEmail}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, employeeEmail: event.target.value }))}
+                                  placeholder="e.g. jamier@udservices.org"
+                                />
+                              </label>
+                              <label className="label">
+                                Start date
+                                <input
+                                  className="input"
+                                  value={catalogDraft.startDate}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, startDate: event.target.value }))}
+                                  placeholder="e.g. 2026-02-01"
+                                />
+                              </label>
+                              <label className="label">
+                                Department
+                                <input
+                                  className="input"
+                                  value={catalogDraft.department}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                                  placeholder="e.g. HCBS"
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 1 && (
+                            <>
+                              <label className="label">
+                                Manager
+                                <input
+                                  className="input"
+                                  value={catalogDraft.manager}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, manager: event.target.value }))}
+                                  placeholder="e.g. Chris Moore"
+                                />
+                              </label>
+                              <label className="label">
+                                Role/Title
+                                <input
+                                  className="input"
+                                  value={catalogDraft.role}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, role: event.target.value }))}
+                                  placeholder="e.g. Program Specialist"
+                                />
+                              </label>
+                              <label className="label">
+                                Location
+                                <input
+                                  className="input"
+                                  value={catalogDraft.location}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, location: event.target.value }))}
+                                  placeholder="e.g. Corporate Blvd"
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 2 && (
+                            <>
+                              <label className="label">
+                                Device needs
+                                <input
+                                  className="input"
+                                  value={catalogDraft.deviceNeeds}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, deviceNeeds: event.target.value }))}
+                                  placeholder="e.g. Laptop + docking station"
+                                />
+                              </label>
+                              <label className="label">
+                                Access needs
+                                <input
+                                  className="input"
+                                  value={catalogDraft.accessNeeds}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, accessNeeds: event.target.value }))}
+                                  placeholder="e.g. Teams, Salesforce"
+                                />
+                              </label>
+                              <label className="label">
+                                Notes
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.notes}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                                  placeholder="Anything else we should know."
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 3 && (
+                            <div className="wizard-review">
+                              <div className="detail-label">Review request details</div>
+                              <div className="wizard-review-list">
+                                <div className="wizard-review-item">
+                                  <strong>Employee:</strong> {catalogDraft.employeeName || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Email:</strong> {catalogDraft.employeeEmail || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Start date:</strong> {catalogDraft.startDate || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Department:</strong> {catalogDraft.department || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Manager:</strong> {catalogDraft.manager || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Role/Title:</strong> {catalogDraft.role || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Location:</strong> {catalogDraft.location || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Device needs:</strong> {catalogDraft.deviceNeeds || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Access needs:</strong> {catalogDraft.accessNeeds || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {catalogError && <div className="form-alert error">{catalogError}</div>}
+                        <div className="wizard-actions">
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={handleCloseCatalog}
+                            disabled={catalogSubmitting}
+                          >
+                            Cancel
+                          </button>
+                          <div className="wizard-actions-right">
+                            {catalogStep > 0 && (
+                              <button
+                                className="btn btn-ghost btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep - 1)}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {!isLastStep ? (
+                              <button
+                                className="btn btn-primary btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep + 1)}
+                                disabled={!canProceed}
+                              >
+                                Next
+                              </button>
+                            ) : (
+                              <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                                {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </form>
+                    );
+                  })()}
+                {catalogActiveId === 'CAT-203' &&
+                  (() => {
+                    const steps = ['Requester', 'Access details', 'Review'];
+                    const isLastStep = catalogStep === steps.length - 1;
+                    const canProceed =
+                      catalogStep === 0
+                        ? Boolean(catalogDraft.vpnUser.trim() && catalogDraft.vpnEmail.trim())
+                        : catalogStep === 1
+                          ? Boolean(catalogDraft.vpnReason.trim())
+                          : true;
+
+                    return (
+                      <form className="detail-card wizard-form" onSubmit={handleCatalogSubmit}>
+                        <div className="wizard-header">
+                          <div>
+                            <div className="detail-label">VPN access request</div>
+                            <div className="wizard-title">VPN access request</div>
+                            <div className="wizard-step-count">
+                              Step {catalogStep + 1} of {steps.length} · {steps[catalogStep]}
+                            </div>
+                          </div>
+                        </div>
+                        <WizardSteps steps={steps} currentStep={catalogStep} />
+                        <div className="wizard-body">
+                          {catalogStep === 0 && (
+                            <>
+                              <label className="label">
+                                Requester name
+                                <input
+                                  className="input"
+                                  value={catalogDraft.vpnUser}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnUser: event.target.value }))}
+                                  placeholder="e.g. Renee Alston"
+                                />
+                              </label>
+                              <label className="label">
+                                Requester email
+                                <input
+                                  className="input"
+                                  type="email"
+                                  value={catalogDraft.vpnEmail}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEmail: event.target.value }))}
+                                  placeholder="e.g. renee@udservices.org"
+                                />
+                              </label>
+                              <label className="label">
+                                Department (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.department}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                                  placeholder="e.g. HCBS"
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 1 && (
+                            <>
+                              <label className="label">
+                                Reason for access
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.vpnReason}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnReason: event.target.value }))}
+                                  placeholder="Describe the remote access need."
+                                />
+                              </label>
+                              <label className="label">
+                                Start date
+                                <input
+                                  className="input"
+                                  value={catalogDraft.vpnStartDate}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnStartDate: event.target.value }))}
+                                  placeholder="e.g. 2026-02-01"
+                                />
+                              </label>
+                              <label className="label">
+                                End date
+                                <input
+                                  className="input"
+                                  value={catalogDraft.vpnEndDate}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEndDate: event.target.value }))}
+                                  placeholder="Leave blank if ongoing"
+                                />
+                              </label>
+                              <label className="label">
+                                Notes
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.notes}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                                  placeholder="Anything else we should know."
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 2 && (
+                            <div className="wizard-review">
+                              <div className="detail-label">Review request details</div>
+                              <div className="wizard-review-list">
+                                <div className="wizard-review-item">
+                                  <strong>Requester:</strong> {catalogDraft.vpnUser || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Email:</strong> {catalogDraft.vpnEmail || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Department:</strong> {catalogDraft.department || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Reason:</strong> {catalogDraft.vpnReason || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Start date:</strong> {catalogDraft.vpnStartDate || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>End date:</strong> {catalogDraft.vpnEndDate || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {catalogError && <div className="form-alert error">{catalogError}</div>}
+                        <div className="wizard-actions">
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={handleCloseCatalog}
+                            disabled={catalogSubmitting}
+                          >
+                            Cancel
+                          </button>
+                          <div className="wizard-actions-right">
+                            {catalogStep > 0 && (
+                              <button
+                                className="btn btn-ghost btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep - 1)}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {!isLastStep ? (
+                              <button
+                                className="btn btn-primary btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep + 1)}
+                                disabled={!canProceed}
+                              >
+                                Next
+                              </button>
+                            ) : (
+                              <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                                {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </form>
+                    );
+                  })()}
+                {catalogActiveId === 'CAT-312' &&
+                  (() => {
+                    const steps = ['Requester', 'Issue details', 'Review'];
+                    const isLastStep = catalogStep === steps.length - 1;
+                    const canProceed =
+                      catalogStep === 0
+                        ? Boolean(catalogDraft.laptopUser.trim() && catalogDraft.laptopEmail.trim())
+                        : catalogStep === 1
+                          ? Boolean(catalogDraft.laptopIssue.trim())
+                          : true;
+
+                    return (
+                      <form className="detail-card wizard-form" onSubmit={handleCatalogSubmit}>
+                        <div className="wizard-header">
+                          <div>
+                            <div className="detail-label">Laptop replacement</div>
+                            <div className="wizard-title">Laptop replacement request</div>
+                            <div className="wizard-step-count">
+                              Step {catalogStep + 1} of {steps.length} · {steps[catalogStep]}
+                            </div>
+                          </div>
+                        </div>
+                        <WizardSteps steps={steps} currentStep={catalogStep} />
+                        <div className="wizard-body">
+                          {catalogStep === 0 && (
+                            <>
+                              <label className="label">
+                                Requester name
+                                <input
+                                  className="input"
+                                  value={catalogDraft.laptopUser}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopUser: event.target.value }))}
+                                  placeholder="e.g. Jamie Rivera"
+                                />
+                              </label>
+                              <label className="label">
+                                Requester email
+                                <input
+                                  className="input"
+                                  type="email"
+                                  value={catalogDraft.laptopEmail}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopEmail: event.target.value }))}
+                                  placeholder="e.g. jamier@udservices.org"
+                                />
+                              </label>
+                              <label className="label">
+                                Department (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.department}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                                  placeholder="e.g. HCBS"
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 1 && (
+                            <>
+                              <label className="label">
+                                Issue summary
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.laptopIssue}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopIssue: event.target.value }))}
+                                  placeholder="Describe the performance or hardware issue."
+                                />
+                              </label>
+                              <label className="label">
+                                Asset tag (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.laptopAssetTag}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopAssetTag: event.target.value }))}
+                                  placeholder="e.g. LAPTOP418"
+                                />
+                              </label>
+                              <label className="label">
+                                Needed by (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.laptopNeededBy}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopNeededBy: event.target.value }))}
+                                  placeholder="e.g. Next Friday"
+                                />
+                              </label>
+                              <label className="label">
+                                Notes
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.notes}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                                  placeholder="Anything else we should know."
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 2 && (
+                            <div className="wizard-review">
+                              <div className="detail-label">Review request details</div>
+                              <div className="wizard-review-list">
+                                <div className="wizard-review-item">
+                                  <strong>Requester:</strong> {catalogDraft.laptopUser || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Email:</strong> {catalogDraft.laptopEmail || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Department:</strong> {catalogDraft.department || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Issue:</strong> {catalogDraft.laptopIssue || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Asset tag:</strong> {catalogDraft.laptopAssetTag || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Needed by:</strong> {catalogDraft.laptopNeededBy || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {catalogError && <div className="form-alert error">{catalogError}</div>}
+                        <div className="wizard-actions">
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={handleCloseCatalog}
+                            disabled={catalogSubmitting}
+                          >
+                            Cancel
+                          </button>
+                          <div className="wizard-actions-right">
+                            {catalogStep > 0 && (
+                              <button
+                                className="btn btn-ghost btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep - 1)}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {!isLastStep ? (
+                              <button
+                                className="btn btn-primary btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep + 1)}
+                                disabled={!canProceed}
+                              >
+                                Next
+                              </button>
+                            ) : (
+                              <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                                {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </form>
+                    );
+                  })()}
+                {catalogActiveId === 'CAT-404' &&
+                  (() => {
+                    const steps = ['Requester', 'Software details', 'Review'];
+                    const isLastStep = catalogStep === steps.length - 1;
+                    const canProceed =
+                      catalogStep === 0
+                        ? Boolean(catalogDraft.softwareUser.trim() && catalogDraft.softwareEmail.trim())
+                        : catalogStep === 1
+                          ? Boolean(catalogDraft.softwareTitle.trim())
+                          : true;
+
+                    return (
+                      <form className="detail-card wizard-form" onSubmit={handleCatalogSubmit}>
+                        <div className="wizard-header">
+                          <div>
+                            <div className="detail-label">Software install</div>
+                            <div className="wizard-title">Software install request</div>
+                            <div className="wizard-step-count">
+                              Step {catalogStep + 1} of {steps.length} · {steps[catalogStep]}
+                            </div>
+                          </div>
+                        </div>
+                        <WizardSteps steps={steps} currentStep={catalogStep} />
+                        <div className="wizard-body">
+                          {catalogStep === 0 && (
+                            <>
+                              <label className="label">
+                                Requester name
+                                <input
+                                  className="input"
+                                  value={catalogDraft.softwareUser}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareUser: event.target.value }))}
+                                  placeholder="e.g. Paul Antic"
+                                />
+                              </label>
+                              <label className="label">
+                                Requester email
+                                <input
+                                  className="input"
+                                  type="email"
+                                  value={catalogDraft.softwareEmail}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareEmail: event.target.value }))}
+                                  placeholder="e.g. paul@udservices.org"
+                                />
+                              </label>
+                              <label className="label">
+                                Department (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.department}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, department: event.target.value }))}
+                                  placeholder="e.g. Resource Center"
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 1 && (
+                            <>
+                              <label className="label">
+                                Software title
+                                <input
+                                  className="input"
+                                  value={catalogDraft.softwareTitle}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareTitle: event.target.value }))}
+                                  placeholder="e.g. Adobe Acrobat Pro"
+                                />
+                              </label>
+                              <label className="label">
+                                Justification
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.softwareJustification}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({ ...prev, softwareJustification: event.target.value }))
+                                  }
+                                  placeholder="Describe why this is needed."
+                                />
+                              </label>
+                              <label className="label">
+                                Cost center (optional)
+                                <input
+                                  className="input"
+                                  value={catalogDraft.softwareCostCenter}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareCostCenter: event.target.value }))}
+                                  placeholder="e.g. HCBS-112"
+                                />
+                              </label>
+                              <label className="label">
+                                Notes
+                                <textarea
+                                  className="textarea"
+                                  value={catalogDraft.notes}
+                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, notes: event.target.value }))}
+                                  placeholder="Anything else we should know."
+                                />
+                              </label>
+                            </>
+                          )}
+                          {catalogStep === 2 && (
+                            <div className="wizard-review">
+                              <div className="detail-label">Review request details</div>
+                              <div className="wizard-review-list">
+                                <div className="wizard-review-item">
+                                  <strong>Requester:</strong> {catalogDraft.softwareUser || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Email:</strong> {catalogDraft.softwareEmail || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Department:</strong> {catalogDraft.department || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Software:</strong> {catalogDraft.softwareTitle || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Justification:</strong> {catalogDraft.softwareJustification || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Cost center:</strong> {catalogDraft.softwareCostCenter || 'Not provided'}
+                                </div>
+                                <div className="wizard-review-item">
+                                  <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {catalogError && <div className="form-alert error">{catalogError}</div>}
+                        <div className="wizard-actions">
+                          <button
+                            className="btn btn-ghost btn-small"
+                            type="button"
+                            onClick={handleCloseCatalog}
+                            disabled={catalogSubmitting}
+                          >
+                            Cancel
+                          </button>
+                          <div className="wizard-actions-right">
+                            {catalogStep > 0 && (
+                              <button
+                                className="btn btn-ghost btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep - 1)}
+                              >
+                                Back
+                              </button>
+                            )}
+                            {!isLastStep ? (
+                              <button
+                                className="btn btn-primary btn-small"
+                                type="button"
+                                onClick={() => handleCatalogStepChange(catalogStep + 1)}
+                                disabled={!canProceed}
+                              >
+                                Next
+                              </button>
+                            ) : (
+                              <button className="btn btn-primary btn-small" type="submit" disabled={catalogSubmitting}>
+                                {catalogSubmitting ? 'Submitting...' : 'Submit request'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </form>
+                    );
+                  })()}
               </section>
             )}
 
@@ -3399,25 +4261,36 @@ function AppIT() {
                     Add article
                   </button>
                 </div>
-                <div className="record-list">
-                  {knowledgeArticles.map((article) => (
-                    <div key={article.id} className="record-row">
-                      <div>
-                        <div className="list-inline">
-                          <InlineTag>{article.category}</InlineTag>
-                          <InlineTag className="mono">{article.id}</InlineTag>
-                        </div>
-                        <p className="work-title">{article.title}</p>
-                        <p className="work-meta">
-                          Updated {article.updated} - {article.views} views
-                        </p>
-                      </div>
-                      <button className="btn btn-ghost btn-small" type="button" onClick={() => handleOpenKnowledge(article.id)}>
-                        View
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                {knowledgeGroups.length ? (
+                  <div className="knowledge-grid">
+                    {knowledgeGroups.flatMap((group) =>
+                      group.articles.map((article) => (
+                        <button
+                          key={article.id}
+                          className="knowledge-card"
+                          type="button"
+                          onClick={() => handleOpenKnowledge(article.id)}
+                        >
+                          <div className="knowledge-card-header">
+                            <InlineTag className="category-chip" style={getKnowledgeCategoryStyle(group.category)}>
+                              {group.category}
+                            </InlineTag>
+                            <InlineTag className="mono">{article.id}</InlineTag>
+                          </div>
+                          <div className="knowledge-card-title">{article.title}</div>
+                          <div className="knowledge-card-summary">{article.summary}</div>
+                          <div className="knowledge-card-meta">
+                            {article.updated} · {article.views} views
+                          </div>
+                        </button>
+                      )),
+                    )}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No knowledge articles match the current search.</p>
+                  </div>
+                )}
               </section>
             )}
 
@@ -3438,12 +4311,17 @@ function AppIT() {
                         : knowledgeView?.summary || 'Detailed guidance for this topic.'}
                     </p>
                   </div>
-                  {knowledgeView && (
-                    <div className="ticket-detail-hero-meta">
-                      <InlineTag>{knowledgeView.category}</InlineTag>
-                      <InlineTag className="mono">{knowledgeView.id}</InlineTag>
-                    </div>
-                  )}
+                {knowledgeView && (
+                  <div className="ticket-detail-hero-meta">
+                    <InlineTag
+                      className="category-chip"
+                      style={getKnowledgeCategoryStyle(knowledgeView.category || 'General')}
+                    >
+                      {knowledgeView.category || 'General'}
+                    </InlineTag>
+                    <InlineTag className="mono">{knowledgeView.id}</InlineTag>
+                  </div>
+                )}
                 </div>
 
                 {knowledgeView ? (
@@ -3573,6 +4451,51 @@ function AppIT() {
                     <p>Select an article to view details.</p>
                   </div>
                 )}
+              </section>
+            )}
+
+            {activeSection === 'directory' && (
+              <section className="card directory-page">
+                <div className="section-title">Employee directory</div>
+                <h2 className="section-heading">Employee Information Hub</h2>
+                <p className="section-sub">Profiles, roles, locations, and assets paired with official headshots.</p>
+                <div className="directory-summary">
+                  <div className="list-inline">
+                    <InlineTag>{directoryTotals.total} employees</InlineTag>
+                    <InlineTag>{directoryTotals.departments} departments</InlineTag>
+                    <InlineTag>{directoryTotals.locations} locations</InlineTag>
+                    {directorySearchTerm && <InlineTag>{directoryRecords.length} results</InlineTag>}
+                  </div>
+                  <div className="directory-meta">Data source: Employee Information Hub.</div>
+                  {directorySearchTerm && (
+                    <div className="directory-meta">
+                      Showing {directoryRecords.length} result{directoryRecords.length === 1 ? '' : 's'} for "
+                      {search.trim()}".
+                    </div>
+                  )}
+                </div>
+                {directoryPageRecords.length ? (
+                  <div className="directory-grid">
+                    {directoryPageRecords.map((record) => (
+                      <EmployeeCard
+                        key={record.employeeId || record.email || `${record.firstName}-${record.lastName}`}
+                        record={record}
+                        photoFile={getEmployeePhotoFile(record, employeePhotoLookup)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No employees found. Try a different search.</p>
+                  </div>
+                )}
+                <PaginationControls
+                  page={directoryPage}
+                  pageSize={EMPLOYEE_DIRECTORY_PAGE_SIZE}
+                  total={directoryRecords.length}
+                  onPageChange={setDirectoryPage}
+                  isLoading={false}
+                />
               </section>
             )}
 
@@ -3885,25 +4808,273 @@ function AppIT() {
                 <div className="section-title">CMDB</div>
                 <h2 className="section-heading">Configuration items and services</h2>
                 <p className="section-sub">Service relationships and operational status.</p>
-                <div className="record-list">
-                  {cmdbItems.map((item) => (
-                    <div key={item.id} className="record-row">
-                      <div>
-                        <div className="list-inline">
-                          <InlineTag className="mono">{item.id}</InlineTag>
-                          <span className={`status-pill status-${toKebabCase(item.status)}`}>{item.status}</span>
-                        </div>
-                        <p className="work-title">{item.name}</p>
-                        <p className="work-meta">
-                          {item.type} - Owner: {item.owner}
-                        </p>
-                      </div>
-                      <button className="btn btn-ghost btn-small" type="button">
-                        Map
+                <div className="ticket-actions">
+                  <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowCmdbForm((prev) => !prev)}>
+                    {showCmdbForm ? 'Close form' : 'Add CI'}
+                  </button>
+                </div>
+                {cmdbError && (
+                  <div className="form-alert error">
+                    <div className="form-alert-message">{cmdbError}</div>
+                  </div>
+                )}
+                {showCmdbForm && (
+                  <div className="detail-card">
+                    <div className="detail-label">Add configuration item</div>
+                    <label className="label">
+                      Name
+                      <input
+                        className="input"
+                        value={cmdbDraft.name}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, name: event.target.value }))}
+                        placeholder="e.g. Jira Cloud"
+                      />
+                    </label>
+                    <label className="label">
+                      Type
+                      <input
+                        className="input"
+                        value={cmdbDraft.type}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, type: event.target.value }))}
+                        placeholder="e.g. SaaS platform"
+                      />
+                    </label>
+                    <label className="label">
+                      Owner
+                      <input
+                        className="input"
+                        value={cmdbDraft.owner}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, owner: event.target.value }))}
+                        placeholder="e.g. IT Ops"
+                      />
+                    </label>
+                    <label className="label">
+                      Status
+                      <select
+                        className="control-select"
+                        value={cmdbDraft.status}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, status: event.target.value }))}
+                      >
+                        {CMDB_STATUS_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="label">
+                      Environment
+                      <input
+                        className="input"
+                        value={cmdbDraft.environment}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, environment: event.target.value }))}
+                        placeholder="e.g. Production"
+                      />
+                    </label>
+                    <label className="label">
+                      Criticality
+                      <input
+                        className="input"
+                        value={cmdbDraft.criticality}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, criticality: event.target.value }))}
+                        placeholder="e.g. Medium"
+                      />
+                    </label>
+                    <label className="label">
+                      Location
+                      <input
+                        className="input"
+                        value={cmdbDraft.location}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, location: event.target.value }))}
+                        placeholder="e.g. AWS us-east-1"
+                      />
+                    </label>
+                    <label className="label">
+                      Service tier
+                      <input
+                        className="input"
+                        value={cmdbDraft.serviceTier}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, serviceTier: event.target.value }))}
+                        placeholder="e.g. Tier 2"
+                      />
+                    </label>
+                    <label className="label">
+                      Support window
+                      <input
+                        className="input"
+                        value={cmdbDraft.supportWindow}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, supportWindow: event.target.value }))}
+                        placeholder="e.g. 24x7"
+                      />
+                    </label>
+                    <label className="label">
+                      Description
+                      <textarea
+                        className="textarea"
+                        value={cmdbDraft.description}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, description: event.target.value }))}
+                        placeholder="Describe the service or system."
+                      />
+                    </label>
+                    <label className="label">
+                      Documentation URL
+                      <input
+                        className="input"
+                        value={cmdbDraft.documentation}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, documentation: event.target.value }))}
+                        placeholder="https://..."
+                      />
+                    </label>
+                    <label className="label">
+                      Dependencies (comma-separated)
+                      <input
+                        className="input"
+                        value={cmdbDraft.dependencies}
+                        onChange={(event) => setCmdbDraft((prev) => ({ ...prev, dependencies: event.target.value }))}
+                        placeholder="e.g. Entra ID, Okta"
+                      />
+                    </label>
+                    <div className="list-inline">
+                      <button className="btn btn-primary btn-small" type="button" onClick={handleAddCmdbItem}>
+                        Add CI
+                      </button>
+                      <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowCmdbForm(false)}>
+                        Cancel
                       </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+                {filteredCmdbRecords.length ? (
+                  <div className="record-list">
+                    {filteredCmdbRecords.map((item) => {
+                      const tasks = Array.isArray(item.tasks) ? item.tasks : [];
+                      const completedTasks = tasks.filter((task) => task.done).length;
+                      const isOpen = openCmdbId === item.id;
+
+                      return (
+                        <div key={item.id} className={`record-row cmdb-row${isOpen ? ' open' : ''}`}>
+                          <div>
+                            <div className="list-inline">
+                              <InlineTag className="mono">{item.id}</InlineTag>
+                              <span className={`status-pill status-${toKebabCase(item.status)}`}>{item.status}</span>
+                            </div>
+                            <p className="work-title">{item.name}</p>
+                            <p className="work-meta">
+                              {item.type} - Owner: {item.owner}
+                            </p>
+                          </div>
+                          <button className="btn btn-ghost btn-small" type="button" onClick={() => handleToggleCmdbItem(item.id)}>
+                            {isOpen ? 'Close' : 'Open'}
+                          </button>
+                          {isOpen && (
+                            <div className="cmdb-details">
+                              <div className="cmdb-detail-grid">
+                                <div>
+                                  <div className="detail-label">Status</div>
+                                  <select
+                                    className="control-select"
+                                    value={item.status}
+                                    onChange={(event) => handleUpdateCmdbItem(item.id, { status: event.target.value })}
+                                  >
+                                    {CMDB_STATUS_OPTIONS.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Owner</div>
+                                  <input
+                                    className="input"
+                                    value={item.owner}
+                                    onChange={(event) => handleUpdateCmdbItem(item.id, { owner: event.target.value })}
+                                  />
+                                </div>
+                                <div>
+                                  <div className="detail-label">Environment</div>
+                                  <div className="detail-value">{item.environment || 'Not set'}</div>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Criticality</div>
+                                  <div className="detail-value">{item.criticality || 'Not set'}</div>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Location</div>
+                                  <div className="detail-value">{item.location || 'Not set'}</div>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Service tier</div>
+                                  <div className="detail-value">{item.serviceTier || 'Not set'}</div>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Support window</div>
+                                  <div className="detail-value">{item.supportWindow || 'Not set'}</div>
+                                </div>
+                                <div>
+                                  <div className="detail-label">Last audit</div>
+                                  <div className="detail-value">{item.lastAudit || 'Not set'}</div>
+                                </div>
+                              </div>
+                              <div className="cmdb-detail-card">
+                                <div className="detail-label">Description</div>
+                                <div className="detail-value">{item.description || 'No description added yet.'}</div>
+                              </div>
+                              {item.documentation && (
+                                <div className="cmdb-detail-card">
+                                  <div className="detail-label">Documentation</div>
+                                  <a className="cmdb-link" href={item.documentation} target="_blank" rel="noreferrer">
+                                    {item.documentation}
+                                  </a>
+                                </div>
+                              )}
+                              <div className="cmdb-detail-card">
+                                <div className="detail-label">Dependencies</div>
+                                {item.dependencies && item.dependencies.length ? (
+                                  <div className="cmdb-tags">
+                                    {item.dependencies.map((dependency) => (
+                                      <InlineTag key={dependency}>{dependency}</InlineTag>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="detail-value">No dependencies linked.</div>
+                                )}
+                              </div>
+                              <div className="cmdb-detail-card">
+                                <div className="detail-label">Maintenance tasks</div>
+                                {tasks.length ? (
+                                  <>
+                                    <div className="cmdb-task-meta">
+                                      {completedTasks}/{tasks.length} tasks complete
+                                    </div>
+                                    <div className="cmdb-task-list">
+                                      {tasks.map((task) => (
+                                        <label key={task.id} className={`cmdb-task${task.done ? ' done' : ''}`}>
+                                          <input
+                                            type="checkbox"
+                                            checked={task.done}
+                                            onChange={() => handleToggleCmdbTask(item.id, task.id)}
+                                          />
+                                          <span>{task.title}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="detail-value">No tasks defined.</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No configuration items match the current filters.</p>
+                  </div>
+                )}
               </section>
             )}
 
@@ -4094,25 +5265,81 @@ function AppIT() {
                   </div>
                 )}
                 <div className="record-list">
-                  {projects.map((project) => (
-                    <div key={project.id} className="record-row">
-                      <div className="project-meta">
-                        <div className="list-inline">
-                          <InlineTag className="mono">{project.id}</InlineTag>
-                          <span className={`status-pill status-${toKebabCase(project.status)}`}>{project.status}</span>
+                  {projects.map((project) => {
+                    const tasks = getProjectTasks(project);
+                    const completedTasks = tasks.filter((task) => task.done).length;
+                    const progressValue = getProjectProgress(project);
+                    const isOpen = openProjectId === project.id;
+
+                    return (
+                      <div key={project.id} className={`record-row project-row${isOpen ? ' open' : ''}`}>
+                        <div className="project-meta">
+                          <div className="list-inline">
+                            <InlineTag className="mono">{project.id}</InlineTag>
+                            <span className={`status-pill status-${toKebabCase(project.status)}`}>{project.status}</span>
+                          </div>
+                          <p className="work-title">{project.title}</p>
+                          <p className="work-meta">Owner: {project.owner}</p>
+                          <div className="progress-track">
+                            <span className="progress-fill" style={{ width: `${progressValue}%` }} />
+                          </div>
+                          <span className="progress-value">{progressValue}% complete</span>
                         </div>
-                        <p className="work-title">{project.title}</p>
-                        <p className="work-meta">Owner: {project.owner}</p>
-                        <div className="progress-track">
-                          <span className="progress-fill" style={{ width: `${project.progress}%` }} />
-                        </div>
-                        <span className="progress-value">{project.progress}% complete</span>
+                        <button className="btn btn-ghost btn-small" type="button" onClick={() => handleToggleProject(project.id)}>
+                          {isOpen ? 'Close' : 'Open'}
+                        </button>
+                        {isOpen && (
+                          <div className="project-details">
+                            <div className="project-detail-grid">
+                              <div>
+                                <div className="detail-label">Summary</div>
+                                <div className="detail-value">{project.summary || 'No summary added yet.'}</div>
+                              </div>
+                              <div>
+                                <div className="detail-label">Target date</div>
+                                <div className="detail-value">{project.targetDate || 'Not scheduled'}</div>
+                              </div>
+                              <div>
+                                <div className="detail-label">Primary team</div>
+                                <div className="detail-value">{project.team || 'Not assigned'}</div>
+                              </div>
+                              <div>
+                                <div className="detail-label">Next milestone</div>
+                                <div className="detail-value">{project.nextMilestone || 'No milestone set'}</div>
+                              </div>
+                            </div>
+                            <div className="project-tasks">
+                              <div className="detail-label">Tasks</div>
+                              {tasks.length ? (
+                                <>
+                                  <div className="project-task-meta">
+                                    {completedTasks}/{tasks.length} tasks complete
+                                  </div>
+                                  <div className="project-task-list">
+                                    {tasks.map((task) => (
+                                      <label
+                                        key={task.id}
+                                        className={`project-task${task.done ? ' done' : ''}`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={task.done}
+                                          onChange={() => handleToggleProjectTask(project.id, task.id)}
+                                        />
+                                        <span>{task.title}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="detail-value project-empty">No tasks added yet.</div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <button className="btn btn-ghost btn-small" type="button">
-                        Open
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 {showProjectForm && (
                   <div className="detail-card">
