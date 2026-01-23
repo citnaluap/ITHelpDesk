@@ -69,7 +69,14 @@ body.dark-mode .entry-item,
 body.dark-mode .task-row,
 body.dark-mode .report-card,
 body.dark-mode .ticket-description,
+body.dark-mode .ticket-attachments,
+body.dark-mode .attachment-card,
 body.dark-mode .entry-composer {
+  background: var(--card);
+  border-color: var(--border);
+}
+
+body.dark-mode .suggestion-row {
   background: var(--card);
   border-color: var(--border);
 }
@@ -88,6 +95,7 @@ body.dark-mode .empty-text,
 body.dark-mode .entry-text,
 body.dark-mode .announcement-body,
 body.dark-mode .ticket-description p,
+body.dark-mode .attachment-details,
 body.dark-mode .service-card p,
 body.dark-mode .article-card p,
 body.dark-mode .support-card p,
@@ -112,6 +120,12 @@ body.dark-mode .task-row .work-title,
 body.dark-mode .module-card h3,
 body.dark-mode .report-card-header h3 {
   color: var(--ink);
+}
+
+body.dark-mode .attachment-preview,
+body.dark-mode .attachment-fallback {
+  background: #0b1629;
+  border-color: var(--border);
 }
 
 body.dark-mode .status-pill,
@@ -1960,6 +1974,39 @@ body.dark-mode .report-card-icon {
   gap: 12px;
 }
 
+.catalog-metrics {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.suggestion-card {
+  display: grid;
+  gap: 10px;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+
+.suggestion-row {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  background: #fff;
+}
+
+.suggestion-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .wizard-header {
   display: flex;
   flex-wrap: wrap;
@@ -2228,6 +2275,37 @@ body.dark-mode .report-card-icon {
   border-color: var(--ink);
 }
 
+.link-card {
+  display: grid;
+  gap: 10px;
+}
+
+.link-preview {
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(var(--accent-rgb), 0.08);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  display: grid;
+  gap: 4px;
+}
+
+.ai-card {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .escalation-card .detail-label {
   color: #dbe6db;
 }
@@ -2274,6 +2352,107 @@ body.dark-mode .report-card-icon {
   white-space: pre-wrap;
 }
 
+.ticket-attachments {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.attachment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.attachment-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.attachment-card {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.attachment-preview {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  min-height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.attachment-preview img,
+.attachment-preview video,
+.attachment-preview iframe {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 0;
+  display: block;
+}
+
+.attachment-preview audio {
+  width: 100%;
+}
+
+.attachment-preview iframe {
+  min-height: 160px;
+}
+
+.attachment-fallback {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 24px;
+  font-weight: 700;
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.attachment-fallback svg {
+  color: var(--muted);
+}
+
+.attachment-meta {
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.attachment-name {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-details {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.attachment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .ticket-activity {
   display: grid;
   gap: 12px;
@@ -2309,6 +2488,21 @@ body.dark-mode .report-card-icon {
   border-color: #a5f3fc;
 }
 
+.entry-item.status {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.entry-item.approval {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.entry-item.automation {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
 .entry-header {
   display: flex;
   align-items: center;
@@ -2328,6 +2522,21 @@ body.dark-mode .report-card-icon {
 .entry-pill.message {
   background: #cffafe;
   color: #0e7490;
+}
+
+.entry-pill.status {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.entry-pill.approval {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.entry-pill.automation {
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .entry-author {

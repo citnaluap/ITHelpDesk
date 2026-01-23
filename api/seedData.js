@@ -22,6 +22,15 @@ export const ticketSeed = [
     device: 'LAPTOP418',
     description:
       'VPN disconnects roughly every 20 minutes when offsite. User confirmed Wi-Fi is stable and Duo prompts succeed.',
+    attachments: [
+      {
+        id: 'att-4921-1',
+        name: 'vpn-log-screenshot.png',
+        url: '/employee-pictures/Adrian Pope.png',
+        type: 'image/png',
+        size: 245812,
+      },
+    ],
     entries: [
       { id: 'entry-1', type: 'note', author: 'Auto-triage', time: '10:16a', text: 'Captured device and VPN logs for last 24 hours.' },
       { id: 'entry-2', type: 'message', author: 'Paul Antic', time: '10:24a', text: 'Hi Prem, can you confirm if this happens on Ethernet as well?' },
@@ -46,6 +55,15 @@ export const ticketSeed = [
     contactPreference: 'Email',
     device: 'LAPTOP286',
     description: 'Laptop is running slow and battery life is failing. Requesting a replacement with the standard UDS bundle.',
+    attachments: [
+      {
+        id: 'att-4923-1',
+        name: 'battery-report.jpg',
+        url: '/employee-pictures/Aimsley Shoffstall.jpg',
+        type: 'image/jpeg',
+        size: 182004,
+      },
+    ],
     entries: [{ id: 'entry-3', type: 'note', author: 'Paul Antic', time: '9:40a', text: 'Confirmed device diagnostics and replacement eligibility.' }],
   },
   {
@@ -190,8 +208,16 @@ export const automationSeed = [
   {
     id: 'AUTO-18',
     name: 'Waiting on user reminder',
-    when: 'Status idle 48h',
+    when: 'Status updated',
     condition: 'Status is Waiting on User',
+    action: 'Send reminder email',
+    enabled: true,
+  },
+  {
+    id: 'AUTO-23',
+    name: 'SLA at-risk reminder',
+    when: 'SLA at risk',
+    condition: 'Priority is High',
     action: 'Send reminder email',
     enabled: true,
   },

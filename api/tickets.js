@@ -170,6 +170,7 @@ export default async function handler(req, res) {
         contactPreference: incoming.contactPreference || 'Email',
         device: incoming.device || '',
         description: incoming.description || incoming.details || '',
+        attachments: Array.isArray(incoming.attachments) ? incoming.attachments : [],
         entries: Array.isArray(incoming.entries) ? incoming.entries : [],
       };
       await db`

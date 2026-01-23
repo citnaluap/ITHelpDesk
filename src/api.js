@@ -30,6 +30,12 @@ export const fetchApprovals = async (params) => {
   return { approvals: data.approvals || [], meta: data.meta || {} };
 };
 
+export const createApproval = async (approval) =>
+  request('/api/approvals', {
+    method: 'POST',
+    body: JSON.stringify({ approval }),
+  });
+
 export const fetchTasks = async (params) => {
   const data = await request(`/api/tasks${buildQuery(params)}`);
   return { tasks: data.tasks || [], meta: data.meta || {} };
@@ -50,6 +56,11 @@ export const updateTask = async (id, updates) =>
 export const fetchAutomationRules = async () => {
   const data = await request('/api/automation-rules');
   return data.rules || [];
+};
+
+export const fetchEmployeeDirectory = async () => {
+  const data = await request('/api/employee-directory');
+  return data.records || [];
 };
 
 export const createAutomationRule = async (rule) =>

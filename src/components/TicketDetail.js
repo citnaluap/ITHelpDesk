@@ -1,4 +1,15 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Download,
+  File,
+  FileArchive,
+  FileCode,
+  FileImage,
+  FileMusic,
+  FileSpreadsheet,
+  FileText,
+  FileVideoCamera,
+} from 'lucide-react';
 import InlineTag from './InlineTag';
 import TicketEntry from './TicketEntry';
 import { buildSlaDisplay, formatDuration, getSlaPolicy, SLA_STATE_LABELS } from '../utils/sla';
@@ -7,6 +18,217 @@ import { getTicketDescription } from '../utils/tickets';
 import { createTask, fetchTasks, updateTask } from '../api';
 
 const createId = (prefix) => `${prefix}-${Math.floor(100 + Math.random() * 900)}`;
+
+const AI_RULES = [
+  {
+    keywords: ['vpn', 'remote access', 'duo', 'mfa'],
+    category: 'Access',
+    impact: 'Just me',
+    urgency: 'Normal',
+    priority: 'Medium',
+    reply:
+      'Thanks for the VPN access request. I have the details and will coordinate access with Security. If access is time-bound, please confirm the start/end dates.',
+  },
+  {
+    keywords: ['laptop', 'battery', 'replacement', 'dock', 'monitor'],
+    category: 'Hardware',
+    impact: 'Just me',
+    urgency: 'Normal',
+    priority: 'Medium',
+    reply:
+      'Thanks for the hardware request. I am reviewing the asset details and will follow up with next steps for a replacement or repair.',
+  },
+  {
+    keywords: ['email', 'outlook', 'mailbox', 'delivery', 'spam'],
+    category: 'Email',
+    impact: 'My team',
+    urgency: 'Normal',
+    priority: 'Medium',
+    reply:
+      'Thanks for the email report. I am checking the mail flow and will update you with findings or next steps.',
+  },
+  {
+    keywords: ['printer', 'print', 'paper jam', 'toner'],
+    category: 'Facilities',
+    impact: 'My team',
+    urgency: 'Normal',
+    priority: 'Low',
+    reply:
+      'Thanks for the printer report. I will coordinate maintenance and confirm when it is back in service.',
+  },
+  {
+    keywords: ['slow', 'performance', 'freeze', 'crash'],
+    category: 'Hardware',
+    impact: 'Just me',
+    urgency: 'Normal',
+    priority: 'Medium',
+    reply:
+      'Thanks for the report. I am reviewing diagnostics and will follow up with troubleshooting steps.',
+  },
+  {
+    keywords: ['account', 'access', 'permission', 'share', 'drive'],
+    category: 'Account / Access',
+    impact: 'Just me',
+    urgency: 'Normal',
+    priority: 'Low',
+    reply:
+      'Thanks for the access request. Please confirm the required access level and any approvals so I can proceed.',
+  },
+];
+
+const buildAiSuggestion = (ticket) => {
+  if (!ticket) return null;
+  const text = `${ticket.title || ''} ${getTicketDescription(ticket)}`.toLowerCase();
+  const matchedRule = AI_RULES.find((rule) => rule.keywords.some((keyword) => text.includes(keyword)));
+  if (!matchedRule) return null;
+  return {
+    category: matchedRule.category,
+    impact: matchedRule.impact,
+    urgency: matchedRule.urgency,
+    priority: matchedRule.priority,
+    reply: matchedRule.reply,
+    reason: `Matched keywords: ${matchedRule.keywords.filter((keyword) => text.includes(keyword)).join(', ')}`,
+  };
+};
+
+const extractFileName = (value) => {
+  if (!value || typeof value !== 'string') return '';
+  const withoutQuery = value.split('?')[0].split('#')[0];
+  const parts = withoutQuery.split('/');
+  return parts[parts.length - 1] || '';
+};
+
+const getFileExtension = (name) => {
+  if (!name || typeof name !== 'string') return '';
+  const lastDot = name.lastIndexOf('.');
+  if (lastDot <= 0 || lastDot === name.length - 1) return '';
+  return name.slice(lastDot + 1).toLowerCase();
+};
+
+const inferMimeFromName = (name) => {
+  const ext = getFileExtension(name);
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'svg':
+      return 'image/svg+xml';
+    case 'pdf':
+      return 'application/pdf';
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'webm':
+      return 'video/webm';
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'ogg':
+      return 'audio/ogg';
+    default:
+      return '';
+  }
+};
+
+const formatBytes = (bytes) => {
+  if (!Number.isFinite(bytes)) return '';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const rounded = unitIndex === 0 || size >= 10 ? Math.round(size) : Math.round(size * 10) / 10;
+  return `${rounded} ${units[unitIndex]}`;
+};
+
+const normalizeAttachments = (attachments) => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map((attachment, index) => {
+      if (!attachment) return null;
+      if (typeof attachment === 'string') {
+        const name = extractFileName(attachment) || `Attachment ${index + 1}`;
+        return {
+          id: `att-${index + 1}`,
+          name,
+          url: attachment,
+          type: inferMimeFromName(name),
+          size: null,
+          extension: getFileExtension(name),
+        };
+      }
+
+      const url =
+        attachment.url ||
+        attachment.downloadUrl ||
+        attachment.contentUrl ||
+        attachment.href ||
+        attachment.link ||
+        attachment.previewUrl ||
+        '';
+      const name =
+        attachment.name ||
+        attachment.filename ||
+        attachment.fileName ||
+        attachment.title ||
+        extractFileName(url) ||
+        `Attachment ${index + 1}`;
+      const type = attachment.type || attachment.mimeType || attachment.contentType || inferMimeFromName(name);
+      const rawSize = attachment.size ?? attachment.bytes ?? attachment.sizeBytes ?? attachment.length;
+      const parsedSize = Number.isFinite(rawSize) ? rawSize : Number.parseInt(rawSize, 10);
+      const size = Number.isFinite(parsedSize) ? parsedSize : null;
+      return {
+        id: attachment.id || attachment.attachmentId || `att-${index + 1}`,
+        name,
+        url,
+        type,
+        size,
+        extension: getFileExtension(name),
+      };
+    })
+    .filter(Boolean);
+};
+
+const getAttachmentKind = (attachment) => {
+  const type = (attachment.type || '').toLowerCase();
+  const extension = attachment.extension;
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('video/')) return 'video';
+  if (type.startsWith('audio/')) return 'audio';
+  if (type === 'application/pdf') return 'pdf';
+  if (extension === 'pdf') return 'pdf';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(extension)) return 'image';
+  if (['mp4', 'mov', 'webm'].includes(extension)) return 'video';
+  if (['mp3', 'wav', 'ogg'].includes(extension)) return 'audio';
+  return 'file';
+};
+
+const getAttachmentIcon = (attachment) => {
+  const kind = getAttachmentKind(attachment);
+  if (kind === 'image') return FileImage;
+  if (kind === 'video') return FileVideoCamera;
+  if (kind === 'audio') return FileMusic;
+  const extension = attachment.extension;
+  if (['pdf', 'txt', 'rtf', 'doc', 'docx', 'odt'].includes(extension)) return FileText;
+  if (['xls', 'xlsx', 'csv', 'ods'].includes(extension)) return FileSpreadsheet;
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) return FileArchive;
+  if (['json', 'js', 'ts', 'tsx', 'jsx', 'py', 'java', 'rb', 'go', 'cs', 'yaml', 'yml'].includes(extension)) {
+    return FileCode;
+  }
+  return File;
+};
 
 function TicketDetail({
   activeTicket,
@@ -17,6 +239,8 @@ function TicketDetail({
   intakeSource,
   requesterRecord,
   requesterAssets,
+  problems,
+  changeEvents,
   cannedResponses,
   selectedCannedId,
   onSelectCannedId,
@@ -100,6 +324,19 @@ function TicketDetail({
     [cannedResponses],
   );
   const descriptionText = getTicketDescription(activeTicket);
+  const attachments = useMemo(
+    () => normalizeAttachments(activeTicket?.attachments),
+    [activeTicket?.attachments],
+  );
+  const aiSuggestion = useMemo(() => buildAiSuggestion(activeTicket), [activeTicket]);
+  const linkedProblem = useMemo(
+    () => problems?.find((problem) => problem.id === activeTicket?.problemId) || null,
+    [problems, activeTicket?.problemId],
+  );
+  const linkedChange = useMemo(
+    () => changeEvents?.find((change) => change.id === activeTicket?.changeId) || null,
+    [changeEvents, activeTicket?.changeId],
+  );
 
   const handleAddEntry = (type) => {
     if (!activeTicket) return;
@@ -147,6 +384,60 @@ function TicketDetail({
     const response = cannedOptions.find((item) => item.id === selectedCannedId);
     if (!response) return;
     setNoteDraft((prev) => (prev ? `${prev}\n\n${response.body}` : response.body));
+  };
+
+  const handleDownloadAll = () => {
+    const downloadable = attachments.filter((attachment) => attachment.url);
+    if (downloadable.length === 0) return;
+    downloadable.forEach((attachment) => {
+      const link = document.createElement('a');
+      link.href = attachment.url;
+      link.download = attachment.name || '';
+      link.rel = 'noreferrer';
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    });
+  };
+
+  const renderAttachmentPreview = (attachment) => {
+    const kind = getAttachmentKind(attachment);
+    const Icon = getAttachmentIcon(attachment);
+    if (!attachment.url) {
+      return (
+        <div className="attachment-fallback">
+          <Icon size={36} />
+          <span>{attachment.extension ? attachment.extension.toUpperCase() : 'FILE'}</span>
+        </div>
+      );
+    }
+    if (kind === 'image') {
+      return <img src={attachment.url} alt={attachment.name} loading="lazy" />;
+    }
+    if (kind === 'video') {
+      return (
+        <video controls preload="metadata">
+          <source src={attachment.url} type={attachment.type || undefined} />
+        </video>
+      );
+    }
+    if (kind === 'audio') {
+      return (
+        <audio controls preload="metadata">
+          <source src={attachment.url} type={attachment.type || undefined} />
+        </audio>
+      );
+    }
+    if (kind === 'pdf') {
+      return <iframe title={attachment.name} src={attachment.url} loading="lazy" />;
+    }
+    return (
+      <div className="attachment-fallback">
+        <Icon size={36} />
+        <span>{attachment.extension ? attachment.extension.toUpperCase() : 'FILE'}</span>
+      </div>
+    );
   };
 
   if (!activeTicket) {
@@ -355,6 +646,59 @@ function TicketDetail({
           </div>
         </div>
 
+        <div className="detail-card link-card">
+          <div className="detail-label">Linked records</div>
+          <label className="control-label">
+            <span>Problem</span>
+            <select
+              className="control-select"
+              value={activeTicket.problemId || ''}
+              onChange={(event) =>
+                onTicketUpdate(activeTicket.id, { problemId: event.target.value || null })
+              }
+            >
+              <option value="">Not linked</option>
+              {(problems || []).map((problem) => (
+                <option key={problem.id} value={problem.id}>
+                  {problem.id} - {problem.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          {linkedProblem && (
+            <div className="link-preview">
+              <div className="work-meta">
+                Status: {linkedProblem.status} · Impact: {linkedProblem.impact}
+              </div>
+              {linkedProblem.rootCause && <div className="work-meta">Root cause: {linkedProblem.rootCause}</div>}
+            </div>
+          )}
+          <label className="control-label">
+            <span>Change</span>
+            <select
+              className="control-select"
+              value={activeTicket.changeId || ''}
+              onChange={(event) =>
+                onTicketUpdate(activeTicket.id, { changeId: event.target.value || null })
+              }
+            >
+              <option value="">Not linked</option>
+              {(changeEvents || []).map((change) => (
+                <option key={change.id} value={change.id}>
+                  {change.id} - {change.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          {linkedChange && (
+            <div className="link-preview">
+              <div className="work-meta">
+                Window: {linkedChange.window} · Status: {linkedChange.status}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="detail-card escalation-card">
           <div className="detail-label">Escalation rules ({activeTicket.priority})</div>
           <ul className="escalation-list">
@@ -439,6 +783,116 @@ function TicketDetail({
         <div className="ticket-description">
           <div className="detail-label">Description</div>
           {descriptionText ? <p className="ticket-description-text">{descriptionText}</p> : <p className="work-meta">No description provided.</p>}
+        </div>
+
+        <div className="detail-card ai-card">
+          <div className="detail-label">Smart assist</div>
+          {aiSuggestion ? (
+            <>
+              <div className="ai-grid">
+                <div>
+                  <div className="detail-label">Suggested category</div>
+                  <div className="detail-value">{aiSuggestion.category}</div>
+                </div>
+                <div>
+                  <div className="detail-label">Priority</div>
+                  <div className="detail-value">{aiSuggestion.priority}</div>
+                </div>
+                <div>
+                  <div className="detail-label">Impact</div>
+                  <div className="detail-value">{aiSuggestion.impact}</div>
+                </div>
+                <div>
+                  <div className="detail-label">Urgency</div>
+                  <div className="detail-value">{aiSuggestion.urgency}</div>
+                </div>
+              </div>
+              <p className="work-meta">{aiSuggestion.reason}</p>
+              <div className="ai-actions">
+                <button
+                  className="btn btn-ghost btn-small"
+                  type="button"
+                  onClick={() =>
+                    onTicketUpdate(activeTicket.id, {
+                      category: aiSuggestion.category,
+                      priority: aiSuggestion.priority,
+                      impact: aiSuggestion.impact,
+                      urgency: aiSuggestion.urgency,
+                    })
+                  }
+                >
+                  Apply classification
+                </button>
+                <button
+                  className="btn btn-primary btn-small"
+                  type="button"
+                  onClick={() =>
+                    setNoteDraft((prev) => (prev ? `${prev}\n\n${aiSuggestion.reply}` : aiSuggestion.reply))
+                  }
+                >
+                  Use suggested reply
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="work-meta">No automated suggestions yet. Add more detail to improve recommendations.</p>
+          )}
+        </div>
+
+        <div className="ticket-attachments">
+          <div className="attachment-header">
+            <div className="detail-label">Attachments</div>
+            {attachments.filter((attachment) => attachment.url).length > 1 && (
+              <button className="btn btn-ghost btn-small" type="button" onClick={handleDownloadAll}>
+                <Download size={14} />
+                <span>Download all</span>
+              </button>
+            )}
+          </div>
+          {attachments.length ? (
+            <div className="attachment-grid">
+              {attachments.map((attachment) => {
+                const kind = getAttachmentKind(attachment);
+                const typeLabel = attachment.type
+                  ? attachment.type.split('/').pop().split(';')[0].toUpperCase()
+                  : attachment.extension
+                  ? attachment.extension.toUpperCase()
+                  : '';
+                const sizeLabel = attachment.size ? formatBytes(attachment.size) : '';
+                const details = [typeLabel, sizeLabel].filter(Boolean).join(' • ');
+                return (
+                  <div key={attachment.id} className="attachment-card">
+                    <div className="attachment-preview">{renderAttachmentPreview(attachment)}</div>
+                    <div className="attachment-meta">
+                      <div className="attachment-name" title={attachment.name}>
+                        {attachment.name}
+                      </div>
+                      {details ? <div className="attachment-details">{details}</div> : <div className="attachment-details">Attachment</div>}
+                      <div className="attachment-actions">
+                        {attachment.url ? (
+                          <>
+                            <a className="btn btn-ghost btn-small" href={attachment.url} target="_blank" rel="noreferrer">
+                              Open
+                            </a>
+                            {kind !== 'image' && (
+                              <a className="btn btn-ghost btn-small" href={attachment.url} download={attachment.name}>
+                                <Download size={14} />
+                                <span>Download</span>
+                              </a>
+                            )}
+                          </>
+                        ) : (
+                          <span className="work-meta">No file link available.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="work-meta">No attachments uploaded.</p>
+          )}
         </div>
 
         <div className="ticket-activity">

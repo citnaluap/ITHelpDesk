@@ -35,6 +35,7 @@ import {
   createCannedResponse,
   createCatalogItem,
   createChange,
+  createApproval,
   createProblem,
   createProject,
   createRelease,
@@ -48,6 +49,7 @@ import {
   fetchCannedResponses,
   fetchCatalogItems,
   fetchChanges,
+  fetchEmployeeDirectory,
   fetchProblems,
   fetchProjects,
   fetchReleases,
@@ -62,8 +64,9 @@ import {
 } from './api';
 import InlineTag from './components/InlineTag';
 import TicketDetail from './components/TicketDetail';
-import { formatTicketCreated, toKebabCase } from './utils/format';
+import { formatEasternDateTime, formatEasternTime, formatTicketCreated, toKebabCase } from './utils/format';
 import { getTicketDescription, getTicketSummary } from './utils/tickets';
+import { buildSlaDisplay, formatDuration, getSlaPolicy } from './utils/sla';
 
 const WORK_FILTERS = ['All', 'Incident', 'Request', 'Task'];
 const TICKET_FILTERS = ['All', 'New', 'In Review', 'In Progress', 'Waiting on User', 'Resolved', 'Closed'];
@@ -72,6 +75,8 @@ const SERVICE_STATUS_OPTIONS = ['Operational', 'Degraded', 'Investigating', 'Mai
 const TICKET_PAGE_SIZE = 12;
 const APPROVAL_PAGE_SIZE = 8;
 const EMPLOYEE_DIRECTORY_PAGE_SIZE = 18;
+const SLA_ON_CALL_LEAD = 'Erik Lofgren';
+const SLA_ESCALATION_OWNER = 'Geoffrey Heller';
 const ASSIGNEES = [
   'Unassigned',
   'Paul Antic',
@@ -114,6 +119,7 @@ const SERVICE_STATUS_FALLBACK = [
 
 const LOCAL_SERVICE_STATUS_KEY = 'dev_service_status';
 const LOCAL_ANNOUNCEMENTS_KEY = 'dev_announcements';
+const LOCAL_DEFLECTION_KEY = 'dev_deflection_stats';
 
 const ANNOUNCEMENTS_FALLBACK = [
   {
@@ -162,6 +168,22 @@ const readLocalList = (key) => {
 };
 
 const writeLocalList = (key, value) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+};
+
+const readLocalValue = (key, fallback) => {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (error) {
+    return fallback;
+  }
+};
+
+const writeLocalValue = (key, value) => {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(key, JSON.stringify(value));
 };
@@ -246,6 +268,291 @@ const changeCalendar = [
 const CHANGE_STATUS_OPTIONS = ['Planned', 'Scheduled', 'In Progress', 'Completed', 'Canceled'];
 
 const reportRanges = ['Last 7 days', 'Last 30 days', 'Quarter to date'];
+
+const getRangeStart = (range, now) => {
+  if (range === 'Last 7 days') return now - 7 * 24 * 60 * 60 * 1000;
+  if (range === 'Last 30 days') return now - 30 * 24 * 60 * 60 * 1000;
+  const date = new Date(now);
+  const month = date.getMonth();
+  const quarterStartMonth = Math.floor(month / 3) * 3;
+  return new Date(date.getFullYear(), quarterStartMonth, 1).getTime();
+};
+
+const toPercent = (value) => `${Math.round(value)}%`;
+
+const median = (values) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const buildReportData = (tickets, range, fallback) => {
+  const now = Date.now();
+  const start = getRangeStart(range, now);
+  const createdInRange = tickets.filter((ticket) => ticket.createdAt && ticket.createdAt >= start);
+  const resolvedInRange = tickets.filter((ticket) => ticket.resolvedAt && ticket.resolvedAt >= start);
+  const respondedInRange = tickets.filter((ticket) => ticket.respondedAt && ticket.respondedAt >= start);
+
+  const resolutionDurations = resolvedInRange
+    .map((ticket) => ticket.resolvedAt - ticket.createdAt)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  const responseDurations = respondedInRange
+    .map((ticket) => ticket.respondedAt - ticket.createdAt)
+    .filter((value) => Number.isFinite(value) && value >= 0);
+
+  const resolvedWithinSla = resolvedInRange.filter((ticket) => {
+    if (!ticket.createdAt || !ticket.resolvedAt) return false;
+    const policy = getSlaPolicy(ticket.priority);
+    return ticket.resolvedAt <= ticket.createdAt + policy.resolveMs;
+  });
+  const slaMetPercent = resolvedInRange.length
+    ? (resolvedWithinSla.length / resolvedInRange.length) * 100
+    : 0;
+
+  const avgCsatValues = tickets
+    .map((ticket) => Number(ticket.csat || ticket.satisfactionScore || ticket.csatScore))
+    .filter((value) => Number.isFinite(value));
+  const csatScore = avgCsatValues.length
+    ? `${(avgCsatValues.reduce((sum, value) => sum + value, 0) / avgCsatValues.length).toFixed(1)}/5`
+    : fallback.kpis.find((item) => item.label === 'CSAT score')?.value || '—';
+
+  const responseMedian = responseDurations.length ? formatDuration(median(responseDurations)) : '—';
+  const resolveMedian = resolutionDurations.length ? formatDuration(median(resolutionDurations)) : '—';
+
+  const categoryCounts = new Map();
+  const priorityCounts = new Map();
+  const channelCounts = new Map();
+  const requesterCounts = new Map();
+  createdInRange.forEach((ticket) => {
+    const category = ticket.category || 'Other';
+    categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    const priority = ticket.priority || 'Medium';
+    priorityCounts.set(priority, (priorityCounts.get(priority) || 0) + 1);
+    const channel = ticket.contactPreference || ticket.sourceSystem || 'Other';
+    channelCounts.set(channel, (channelCounts.get(channel) || 0) + 1);
+    const requesterKey = ticket.department || ticket.requester || 'Other';
+    requesterCounts.set(requesterKey, (requesterCounts.get(requesterKey) || 0) + 1);
+  });
+
+  const toSortedList = (map, limit = 6) =>
+    Array.from(map.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, limit);
+
+  const backlogBuckets = [
+    { label: '0-1 days', min: 0, max: 1 },
+    { label: '2-3 days', min: 2, max: 3 },
+    { label: '4-7 days', min: 4, max: 7 },
+    { label: '8-14 days', min: 8, max: 14 },
+    { label: '15+ days', min: 15, max: Infinity },
+  ];
+  const backlogAging = backlogBuckets.map((bucket) => ({ label: bucket.label, value: 0 }));
+  tickets
+    .filter((ticket) => !['Resolved', 'Closed'].includes(ticket.status))
+    .forEach((ticket) => {
+      if (!ticket.createdAt) return;
+      const ageDays = Math.floor((now - ticket.createdAt) / (24 * 60 * 60 * 1000));
+      const bucketIndex = backlogBuckets.findIndex((bucket) => ageDays >= bucket.min && ageDays <= bucket.max);
+      if (bucketIndex >= 0) backlogAging[bucketIndex].value += 1;
+    });
+
+  const assigneeMap = new Map();
+  const trackAssignee = (ticket, targetMap) => {
+    const assignee = ticket.assignee || 'Unassigned';
+    if (!targetMap.has(assignee)) {
+      targetMap.set(assignee, {
+        name: assignee,
+        assigned: 0,
+        resolved: 0,
+        responseTimes: [],
+        resolveTimes: [],
+        slaMet: 0,
+        slaTotal: 0,
+      });
+    }
+    return targetMap.get(assignee);
+  };
+
+  createdInRange.forEach((ticket) => {
+    const row = trackAssignee(ticket, assigneeMap);
+    row.assigned += 1;
+    if (ticket.respondedAt) row.responseTimes.push(ticket.respondedAt - ticket.createdAt);
+  });
+  resolvedInRange.forEach((ticket) => {
+    const row = trackAssignee(ticket, assigneeMap);
+    row.resolved += 1;
+    if (ticket.resolvedAt) row.resolveTimes.push(ticket.resolvedAt - ticket.createdAt);
+    const policy = getSlaPolicy(ticket.priority);
+    if (ticket.resolvedAt <= ticket.createdAt + policy.resolveMs) {
+      row.slaMet += 1;
+    }
+    row.slaTotal += 1;
+  });
+
+  const teamPerformance = Array.from(assigneeMap.values())
+    .map((row) => ({
+      name: row.name,
+      assigned: row.assigned,
+      resolved: row.resolved,
+      firstResponse: row.responseTimes.length ? formatDuration(median(row.responseTimes)) : '—',
+      sla: row.slaTotal ? Math.round((row.slaMet / row.slaTotal) * 100) : 0,
+      reopen: 0,
+    }))
+    .sort((a, b) => b.assigned - a.assigned);
+
+  const slaByPriority = ['Critical', 'High', 'Medium', 'Low'].map((priority) => {
+    const resolved = resolvedInRange.filter((ticket) => (ticket.priority || 'Medium') === priority);
+    const met = resolved.filter((ticket) => {
+      const policy = getSlaPolicy(ticket.priority);
+      return ticket.resolvedAt <= ticket.createdAt + policy.resolveMs;
+    });
+    const percent = resolved.length ? Math.round((met.length / resolved.length) * 100) : 0;
+    return { label: priority, value: percent };
+  });
+
+  const slaCategoryMap = new Map();
+  resolvedInRange.forEach((ticket) => {
+    const category = ticket.category || 'Other';
+    if (!slaCategoryMap.has(category)) {
+      slaCategoryMap.set(category, { label: category, met: 0, total: 0 });
+    }
+    const row = slaCategoryMap.get(category);
+    const policy = getSlaPolicy(ticket.priority);
+    if (ticket.resolvedAt <= ticket.createdAt + policy.resolveMs) {
+      row.met += 1;
+    }
+    row.total += 1;
+  });
+  const slaByCategory = Array.from(slaCategoryMap.values())
+    .map((row) => ({
+      label: row.label,
+      value: row.total ? Math.round((row.met / row.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  const slaQueueMap = new Map();
+  resolvedInRange.forEach((ticket) => {
+    const queue = ticket.assignee || 'Unassigned';
+    if (!slaQueueMap.has(queue)) {
+      slaQueueMap.set(queue, { label: queue, met: 0, total: 0 });
+    }
+    const row = slaQueueMap.get(queue);
+    const policy = getSlaPolicy(ticket.priority);
+    if (ticket.resolvedAt <= ticket.createdAt + policy.resolveMs) {
+      row.met += 1;
+    }
+    row.total += 1;
+  });
+  const slaByQueue = Array.from(slaQueueMap.values())
+    .map((row) => ({
+      label: row.label,
+      value: row.total ? Math.round((row.met / row.total) * 100) : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  const csatCategoryMap = new Map();
+  const csatQueueMap = new Map();
+  tickets.forEach((ticket) => {
+    const score = Number(ticket.csat || ticket.satisfactionScore || ticket.csatScore);
+    if (!Number.isFinite(score)) return;
+    const category = ticket.category || 'Other';
+    const assignee = ticket.assignee || 'Unassigned';
+    if (!csatCategoryMap.has(category)) {
+      csatCategoryMap.set(category, { label: category, total: 0, count: 0 });
+    }
+    if (!csatQueueMap.has(assignee)) {
+      csatQueueMap.set(assignee, { label: assignee, total: 0, count: 0 });
+    }
+    const catRow = csatCategoryMap.get(category);
+    catRow.total += score;
+    catRow.count += 1;
+    const queueRow = csatQueueMap.get(assignee);
+    queueRow.total += score;
+    queueRow.count += 1;
+  });
+  const csatByCategory = Array.from(csatCategoryMap.values())
+    .map((row) => ({
+      label: row.label,
+      value: row.count ? Number((row.total / row.count).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+  const csatByQueue = Array.from(csatQueueMap.values())
+    .map((row) => ({
+      label: row.label,
+      value: row.count ? Number((row.total / row.count).toFixed(2)) : 0,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+
+  const volumeTrend =
+    range === 'Last 7 days'
+      ? Array.from({ length: 7 }).map((_, index) => {
+          const dayStart = new Date(now - (6 - index) * 24 * 60 * 60 * 1000);
+          const label = dayStart.toLocaleDateString('en-US', { weekday: 'short' });
+          const dayEnd = new Date(dayStart);
+          dayEnd.setHours(23, 59, 59, 999);
+          const count = createdInRange.filter(
+            (ticket) => ticket.createdAt >= dayStart.getTime() && ticket.createdAt <= dayEnd.getTime(),
+          ).length;
+          return { label, value: count };
+        })
+      : range === 'Last 30 days'
+        ? ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'].map((label, index) => {
+            const startOffset = (3 - index) * 7 * 24 * 60 * 60 * 1000;
+            const endOffset = startOffset + 7 * 24 * 60 * 60 * 1000;
+            const windowStart = now - endOffset;
+            const windowEnd = now - startOffset;
+            const count = createdInRange.filter(
+              (ticket) => ticket.createdAt >= windowStart && ticket.createdAt < windowEnd,
+            ).length;
+            return { label, value: count };
+          })
+        : ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            .slice(0, 12)
+            .map((label, index) => {
+              const monthStart = new Date(new Date(now).getFullYear(), index, 1).getTime();
+              const monthEnd = new Date(new Date(now).getFullYear(), index + 1, 1).getTime();
+              const count = createdInRange.filter(
+                (ticket) => ticket.createdAt >= monthStart && ticket.createdAt < monthEnd,
+              ).length;
+              return { label, value: count };
+            })
+            .filter((item) => item.value > 0);
+
+  const kpis = [
+    { label: 'New tickets', value: String(createdInRange.length), delta: '—', trend: 'up', sub: `since ${new Date(start).toLocaleDateString()}`, icon: Activity },
+    { label: 'Resolved within SLA', value: toPercent(slaMetPercent), delta: '—', trend: 'up', sub: 'resolution SLA', icon: ShieldCheck },
+    { label: 'First response time', value: responseMedian, delta: '—', trend: 'up', sub: 'median response', icon: Clock },
+    { label: 'Mean time to resolve', value: resolveMedian, delta: '—', trend: 'up', sub: 'median MTTR', icon: Gauge },
+    { label: 'CSAT score', value: csatScore, delta: '—', trend: 'up', sub: 'survey average', icon: TrendingUp },
+    { label: 'Reopen rate', value: '0%', delta: '—', trend: 'up', sub: 'no reopen data', icon: Layers },
+  ];
+
+  return {
+    ...fallback,
+    kpis,
+    volumeTrend: volumeTrend.length ? volumeTrend : fallback.volumeTrend,
+    channelMix: channelCounts.size ? toSortedList(channelCounts, 5) : fallback.channelMix,
+    categoryMix: categoryCounts.size ? toSortedList(categoryCounts, 6) : fallback.categoryMix,
+    priorityMix: priorityCounts.size ? toSortedList(priorityCounts, 4) : fallback.priorityMix,
+    slaByPriority: slaByPriority.some((item) => item.value) ? slaByPriority : fallback.slaByPriority,
+    slaByCategory: slaByCategory.length ? slaByCategory : fallback.slaByPriority,
+    slaByQueue: slaByQueue.length ? slaByQueue : fallback.slaByPriority,
+    backlogAging: backlogAging.some((item) => item.value) ? backlogAging : fallback.backlogAging,
+    teamPerformance: teamPerformance.length ? teamPerformance : fallback.teamPerformance,
+    topRequesters: requesterCounts.size ? toSortedList(requesterCounts, 6).map((item) => ({ name: item.label, count: item.value })) : fallback.topRequesters,
+    csatByCategory: csatByCategory.length ? csatByCategory : fallback.csatTrend,
+    csatByQueue: csatByQueue.length ? csatByQueue : fallback.csatTrend,
+  };
+};
 
 const reportDataByRange = {
   'Last 7 days': {
@@ -732,10 +1039,56 @@ const KNOWLEDGE_CATEGORY_STYLES = {
 
 const getKnowledgeCategoryStyle = (category) => KNOWLEDGE_CATEGORY_STYLES[category] || KNOWLEDGE_CATEGORY_STYLES.General;
 
+const CATALOG_SUGGESTIONS = {
+  'CAT-101': ['KB-112', 'KB-179'],
+  'CAT-203': ['KB-106', 'KB-140'],
+  'CAT-312': ['KB-118', 'KB-140'],
+  'CAT-404': ['KB-112', 'KB-140'],
+};
+
+const getSuggestedArticles = (catalogId, articles) => {
+  const ids = CATALOG_SUGGESTIONS[catalogId] || [];
+  const mapped = ids
+    .map((id) => articles.find((article) => article.id === id))
+    .filter(Boolean);
+  if (mapped.length) return mapped;
+  return articles.slice(0, 3);
+};
+
 const problemRecords = [
-  { id: 'PRB-19', title: 'Recurring VPN disconnects', status: 'Root cause analysis', impact: 'Multiple teams', linked: 6 },
-  { id: 'PRB-22', title: 'Email delays with vendor relay', status: 'Known error', impact: 'Org-wide', linked: 3 },
-  { id: 'PRB-25', title: 'Print server spooler crash', status: 'Workaround', impact: 'Single site', linked: 4 },
+  {
+    id: 'PRB-19',
+    title: 'Recurring VPN disconnects',
+    status: 'Root cause analysis',
+    impact: 'Multiple teams',
+    linked: 6,
+    owner: 'Erik Lofgren',
+    rootCause: 'VPN gateway firmware regression causing session resets.',
+    workaround: 'Pin users to secondary gateway.',
+    fixPlan: 'Patch firmware in next maintenance window.',
+  },
+  {
+    id: 'PRB-22',
+    title: 'Email delays with vendor relay',
+    status: 'Known error',
+    impact: 'Org-wide',
+    linked: 3,
+    owner: 'Geoffrey Heller',
+    rootCause: 'Throttling on third-party relay.',
+    workaround: 'Failover relay for high priority domains.',
+    fixPlan: 'Negotiate new relay limits.',
+  },
+  {
+    id: 'PRB-25',
+    title: 'Print server spooler crash',
+    status: 'Workaround',
+    impact: 'Single site',
+    linked: 4,
+    owner: 'Miles Grater',
+    rootCause: 'Driver conflict after Windows update.',
+    workaround: 'Rollback to previous driver package.',
+    fixPlan: 'Standardize driver set across sites.',
+  },
 ];
 const PROBLEM_STATUS_OPTIONS = ['Investigation', 'Root cause analysis', 'Known error', 'Workaround', 'Resolved'];
 
@@ -1080,7 +1433,17 @@ const ApprovalRow = ({ item, onDecision }) => {
           <span className={`status-pill status-${toKebabCase(item.status)}`}>{item.status}</span>
         </div>
         <p className="work-title">{item.title}</p>
-        <p className="work-meta">{item.requester}</p>
+        <p className="work-meta">
+          {item.requester}
+          {item.ticketId ? ` · ${item.ticketId}` : ''}
+        </p>
+        {(item.approver || item.due) && (
+          <p className="work-meta">
+            {item.approver ? `Approver: ${item.approver}` : ''}
+            {item.approver && item.due ? ' · ' : ''}
+            {item.due ? `Due: ${item.due}` : ''}
+          </p>
+        )}
       </div>
       <div className="approval-actions">
         <button className="btn btn-primary btn-small" type="button" disabled={!isPending} onClick={() => onDecision(item.id, 'Approved')}>
@@ -1274,6 +1637,12 @@ const getProjectProgress = (project) => {
 const EMPLOYEE_PHOTO_BASE = `${process.env.PUBLIC_URL || ''}/employee-pictures`;
 
 const normalizeEmployeeKey = (value) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const buildEmployeeDisplayName = (record) => {
+  if (!record) return '';
+  const first = (record.firstName || '').trim();
+  const last = (record.lastName || '').trim();
+  return [first, last].filter(Boolean).join(' ').trim();
+};
 
 const buildEmployeePhotoLookup = (files) => {
   const orderedFiles = [...files].sort((a, b) => {
@@ -1320,6 +1689,77 @@ const getEmployeePhotoFile = (record, lookup) => {
     }
   }
   return '';
+};
+
+const HIGH_COST_SOFTWARE = [
+  'adobe',
+  'autocad',
+  'salesforce',
+  'microsoft 365',
+  'office 365',
+  'zoom',
+  'slack',
+  'jira',
+  'confluence',
+];
+
+const getApprovalRequirements = (catalogId, draft, matchRecord) => {
+  const approvals = [];
+  const managerName = draft.manager?.trim() || matchRecord?.supervisor || 'Manager';
+  if (catalogId === 'CAT-101') {
+    approvals.push({
+      type: 'Onboarding',
+      title: `Onboarding approval for ${draft.employeeName || 'new hire'}`,
+      approver: managerName,
+      due: 'Today',
+    });
+    approvals.push({
+      type: 'Onboarding',
+      title: `IT provisioning for ${draft.employeeName || 'new hire'}`,
+      approver: 'IT Manager',
+      due: 'Today',
+    });
+  }
+  if (catalogId === 'CAT-203') {
+    approvals.push({
+      type: 'Access',
+      title: `VPN access review for ${draft.vpnUser || 'requester'}`,
+      approver: 'Security',
+      due: 'Today',
+    });
+  }
+  if (catalogId === 'CAT-312') {
+    const issue = draft.laptopIssue?.toLowerCase() || '';
+    const needsSecurity = ['lost', 'stolen', 'missing'].some((term) => issue.includes(term));
+    approvals.push({
+      type: needsSecurity ? 'Security' : 'Hardware',
+      title: `Laptop replacement approval for ${draft.laptopUser || 'requester'}`,
+      approver: needsSecurity ? 'Security' : managerName,
+      due: 'Today',
+    });
+  }
+  if (catalogId === 'CAT-404') {
+    const software = draft.softwareTitle?.toLowerCase() || '';
+    const isHighCost = HIGH_COST_SOFTWARE.some((item) => software.includes(item));
+    const needsManager = !draft.softwareCostCenter?.trim() || isHighCost;
+    if (needsManager) {
+      approvals.push({
+        type: 'Software',
+        title: `Software approval for ${draft.softwareTitle || 'requester software'}`,
+        approver: managerName,
+        due: 'Today',
+      });
+    }
+    if (draft.softwareRequiresAdmin) {
+      approvals.push({
+        type: 'Security',
+        title: `Admin install review for ${draft.softwareTitle || 'software'}`,
+        approver: 'Security',
+        due: 'Today',
+      });
+    }
+  }
+  return approvals;
 };
 
 const getEmployeeInitials = (name) =>
@@ -1425,6 +1865,68 @@ const EmployeeCard = ({ record, photoFile }) => {
   );
 };
 
+const HubMatchCard = ({ record, onApply }) => {
+  if (!record) return null;
+  const name = buildEmployeeDisplayName(record) || 'Employee';
+  const assets = buildAssetList(record);
+  return (
+    <div className="form-alert success">
+      <div className="form-alert-message">Employee Hub match found</div>
+      <div className="form-alert-details">
+        <div>
+          <strong>{name}</strong>
+          {record.jobTitle ? ` · ${record.jobTitle}` : ''}
+          {record.department ? ` · ${record.department}` : ''}
+        </div>
+        {record.location && <div>Location: {record.location}</div>}
+        {record.supervisor && <div>Supervisor: {record.supervisor}</div>}
+        {assets.length ? (
+          <div className="asset-grid">
+            {assets.map((asset) => (
+              <div key={asset.label} className="asset-chip">
+                <span>{asset.label}</span>
+                <strong>{asset.value}</strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>No assets listed in hub.</div>
+        )}
+      </div>
+      <button className="btn btn-ghost btn-small" type="button" onClick={onApply}>
+        Use hub data
+      </button>
+    </div>
+  );
+};
+
+const SuggestedArticles = ({ articles, onOpen, onDeflect }) => {
+  if (!articles.length) return null;
+  return (
+    <div className="detail-card suggestion-card">
+      <div className="detail-label">Suggested knowledge articles</div>
+      <div className="suggestion-list">
+        {articles.map((article) => (
+          <div key={article.id} className="suggestion-row">
+            <div>
+              <div className="work-title">{article.title}</div>
+              <div className="work-meta">{article.summary}</div>
+            </div>
+            <div className="suggestion-actions">
+              <button className="btn btn-ghost btn-small" type="button" onClick={() => onOpen(article)}>
+                View article
+              </button>
+              <button className="btn btn-primary btn-small" type="button" onClick={() => onDeflect(article)}>
+                Resolved
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 function AppIT() {
   const isAuthRequired = process.env.NODE_ENV === 'production';
   const defaultDevUser = isAuthRequired ? '' : (TECHNICIANS[0]?.name || '');
@@ -1434,6 +1936,7 @@ function AppIT() {
   const [ticketFilter, setTicketFilter] = useState('All');
   const [approvals, setApprovals] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [employeeDirectoryRecords, setEmployeeDirectoryRecords] = useState(() => employeeDirectory);
   const [selectedTicketId, setSelectedTicketId] = useState('');
   const [ticketsMeta, setTicketsMeta] = useState({ total: 0, limit: TICKET_PAGE_SIZE, offset: 0 });
   const [approvalsMeta, setApprovalsMeta] = useState({ total: 0, limit: APPROVAL_PAGE_SIZE, offset: 0 });
@@ -1496,24 +1999,31 @@ function AppIT() {
     manager: '',
     role: '',
     location: '',
+    onboardingNeedsHardware: true,
+    onboardingNeedsAccess: true,
     deviceNeeds: '',
     accessNeeds: '',
     notes: '',
     vpnUser: '',
     vpnEmail: '',
     vpnReason: '',
+    vpnTemporaryAccess: false,
     vpnStartDate: '',
     vpnEndDate: '',
     laptopUser: '',
     laptopEmail: '',
     laptopIssue: '',
     laptopAssetTag: '',
+    laptopNeedsLoaner: false,
+    laptopLoanerDuration: '',
     laptopNeededBy: '',
     softwareUser: '',
     softwareEmail: '',
     softwareTitle: '',
     softwareJustification: '',
     softwareCostCenter: '',
+    softwareRequiresAdmin: false,
+    softwareAdminNeed: '',
   });
   const [automationDraft, setAutomationDraft] = useState({
     name: '',
@@ -1548,6 +2058,10 @@ function AppIT() {
     status: 'Investigation',
     impact: '',
     linked: '',
+    owner: '',
+    rootCause: '',
+    workaround: '',
+    fixPlan: '',
   });
   const [problemError, setProblemError] = useState('');
   const [showProblemForm, setShowProblemForm] = useState(false);
@@ -1570,31 +2084,60 @@ function AppIT() {
   const [announcementError, setAnnouncementError] = useState('');
   const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState('');
+  const [deflectionStats, setDeflectionStats] = useState(() =>
+    readLocalValue(LOCAL_DEFLECTION_KEY, {
+      views: 0,
+      deflected: 0,
+      submitted: 0,
+      articleOpens: 0,
+    }),
+  );
   const [theme, setTheme] = useState('light');
   const [authError, setAuthError] = useState('');
 
   const employeeLookup = useMemo(() => {
     const map = new Map();
-    employeeDirectory.forEach((record) => {
+    employeeDirectoryRecords.forEach((record) => {
       if (record.email) {
         map.set(record.email.toLowerCase(), record);
       }
     });
     return map;
-  }, []);
+  }, [employeeDirectoryRecords]);
+  const employeeNameLookup = useMemo(() => {
+    const map = new Map();
+    employeeDirectoryRecords.forEach((record) => {
+      const first = (record.firstName || '').trim();
+      const last = (record.lastName || '').trim();
+      const firstInitial = first ? first[0] : '';
+      const candidates = [
+        `${first} ${last}`.trim(),
+        `${last} ${first}`.trim(),
+        `${firstInitial} ${last}`.trim(),
+        `${last} ${firstInitial}`.trim(),
+      ];
+      candidates.forEach((candidate) => {
+        const key = normalizeEmployeeKey(candidate);
+        if (key && !map.has(key)) {
+          map.set(key, record);
+        }
+      });
+    });
+    return map;
+  }, [employeeDirectoryRecords]);
   const employeePhotoLookup = useMemo(() => buildEmployeePhotoLookup(employeePhotos), []);
   const directorySearchTerm = search.trim().toLowerCase();
   const directoryTotals = useMemo(() => {
     const departments = new Set();
     const locations = new Set();
-    employeeDirectory.forEach((record) => {
+    employeeDirectoryRecords.forEach((record) => {
       if (record.department) departments.add(record.department);
       if (record.location) locations.add(record.location);
     });
-    return { total: employeeDirectory.length, departments: departments.size, locations: locations.size };
-  }, []);
+    return { total: employeeDirectoryRecords.length, departments: departments.size, locations: locations.size };
+  }, [employeeDirectoryRecords]);
   const directoryRecords = useMemo(() => {
-    const records = employeeDirectory.filter((record) => {
+    const records = employeeDirectoryRecords.filter((record) => {
       if (!directorySearchTerm) return true;
       const haystack = [
         record.firstName,
@@ -1617,7 +2160,7 @@ function AppIT() {
       if (lastCompare !== 0) return lastCompare;
       return (a.firstName || '').localeCompare(b.firstName || '');
     });
-  }, [directorySearchTerm]);
+  }, [directorySearchTerm, employeeDirectoryRecords]);
   const directoryPageRecords = useMemo(() => {
     const start = directoryPage * EMPLOYEE_DIRECTORY_PAGE_SIZE;
     return directoryRecords.slice(start, start + EMPLOYEE_DIRECTORY_PAGE_SIZE);
@@ -1703,7 +2246,10 @@ function AppIT() {
       .slice()
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
   }, [tickets]);
-  const reportData = reportDataByRange[reportRange];
+  const reportData = useMemo(
+    () => buildReportData(tickets, reportRange, reportDataByRange[reportRange]),
+    [tickets, reportRange],
+  );
 
   const activeTicket = tickets.find((item) => item.id === selectedTicketId) || tickets[0] || null;
   const requesterRecord = activeTicket?.requesterEmail
@@ -1713,17 +2259,50 @@ function AppIT() {
   const activeKnowledge =
     knowledgeArticles.find((article) => article.id === selectedKnowledgeId) || knowledgeArticles[0] || null;
   const knowledgeView = isEditingKnowledge && knowledgeDraft ? knowledgeDraft : activeKnowledge;
+  const catalogSuggestedArticles = useMemo(
+    () => (catalogActiveId ? getSuggestedArticles(catalogActiveId, knowledgeArticles) : []),
+    [catalogActiveId, knowledgeArticles],
+  );
+
+  const resolveEmployeeMatch = (name, email) => {
+    if (email) {
+      const match = employeeLookup.get(email.toLowerCase());
+      if (match) return match;
+    }
+    const key = normalizeEmployeeKey(name);
+    if (!key) return null;
+    return employeeNameLookup.get(key) || null;
+  };
+
+  const onboardingMatch = useMemo(
+    () => resolveEmployeeMatch(catalogDraft.employeeName, catalogDraft.employeeEmail),
+    [catalogDraft.employeeName, catalogDraft.employeeEmail, employeeNameLookup, employeeLookup],
+  );
+  const vpnMatch = useMemo(
+    () => resolveEmployeeMatch(catalogDraft.vpnUser, catalogDraft.vpnEmail),
+    [catalogDraft.vpnUser, catalogDraft.vpnEmail, employeeNameLookup, employeeLookup],
+  );
+  const laptopMatch = useMemo(
+    () => resolveEmployeeMatch(catalogDraft.laptopUser, catalogDraft.laptopEmail),
+    [catalogDraft.laptopUser, catalogDraft.laptopEmail, employeeNameLookup, employeeLookup],
+  );
+  const softwareMatch = useMemo(
+    () => resolveEmployeeMatch(catalogDraft.softwareUser, catalogDraft.softwareEmail),
+    [catalogDraft.softwareUser, catalogDraft.softwareEmail, employeeNameLookup, employeeLookup],
+  );
 
   const ticketQuery = useMemo(() => {
     const query = {
-      limit: TICKET_PAGE_SIZE,
-      offset: ticketPage * TICKET_PAGE_SIZE,
+      limit: activeSection === 'reports' ? 200 : TICKET_PAGE_SIZE,
+      offset: activeSection === 'reports' ? 0 : ticketPage * TICKET_PAGE_SIZE,
     };
     const term = search.trim();
     if (term) query.q = term;
     if (activeSection === 'my-work') {
       if (currentUser) query.assignee = currentUser;
     } else if (['tickets', 'ticket-detail'].includes(activeSection) && ticketFilter !== 'All') {
+      query.status = ticketFilter;
+    } else if (activeSection === 'reports' && ticketFilter !== 'All') {
       query.status = ticketFilter;
     }
     return query;
@@ -1742,7 +2321,7 @@ function AppIT() {
   }, [activeSection, approvalPage, search]);
 
   useEffect(() => {
-    const shouldLoad = ['tickets', 'ticket-detail', 'overview', 'my-work'].includes(activeSection);
+    const shouldLoad = ['tickets', 'ticket-detail', 'overview', 'my-work', 'reports'].includes(activeSection);
     if (!shouldLoad) return undefined;
     let isActive = true;
     const loadTickets = async () => {
@@ -1823,6 +2402,25 @@ function AppIT() {
       }
     };
     loadCanned();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadEmployeeDirectory = async () => {
+      try {
+        const records = await fetchEmployeeDirectory();
+        if (!isActive) return;
+        if (records.length) {
+          setEmployeeDirectoryRecords(records);
+        }
+      } catch (error) {
+        console.error('Failed to load Employee Information Hub data', error);
+      }
+    };
+    loadEmployeeDirectory();
     return () => {
       isActive = false;
     };
@@ -1988,11 +2586,33 @@ function AppIT() {
     }
   }, [theme]);
 
+  useEffect(() => {
+    writeLocalValue(LOCAL_DEFLECTION_KEY, deflectionStats);
+  }, [deflectionStats]);
+
   const handleApprovalDecision = (id, status) => {
-    setApprovals((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
-    updateApproval(id, { status }).catch((error) => {
+    const decidedAt = Date.now();
+    let decidedApproval = null;
+    setApprovals((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        decidedApproval = { ...item, status, decidedAt };
+        return decidedApproval;
+      }),
+    );
+    updateApproval(id, { status, decidedAt }).catch((error) => {
       console.error('Failed to update approval', error);
     });
+    if (decidedApproval?.ticketId) {
+      const entry = {
+        id: `entry-${decidedAt}`,
+        type: 'approval',
+        author: currentUser || 'Approver',
+        time: formatEasternTime(decidedAt),
+        text: `${status} approval: ${decidedApproval.title}`,
+      };
+      appendEntriesToTicket(decidedApproval.ticketId, [entry]);
+    }
   };
 
   const handleTicketUpdate = (id, updates) => {
@@ -2000,7 +2620,53 @@ function AppIT() {
     setTickets((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        const next = { ...item, ...updates };
+        const now = Date.now();
+        const nextEntries = [...(item.entries || [])];
+        if (updates.status && updates.status !== item.status) {
+          nextEntries.push({
+            id: `entry-${now}-status`,
+            type: 'status',
+            author: currentUser || 'System',
+            time: formatEasternTime(now),
+            text: `Status changed from ${item.status} to ${updates.status}.`,
+          });
+        }
+        if (updates.assignee && updates.assignee !== item.assignee) {
+          nextEntries.push({
+            id: `entry-${now}-assignee`,
+            type: 'status',
+            author: currentUser || 'System',
+            time: formatEasternTime(now),
+            text: `Assignee changed from ${item.assignee || 'Unassigned'} to ${updates.assignee}.`,
+          });
+        }
+        if (Object.prototype.hasOwnProperty.call(updates, 'problemId') && updates.problemId !== item.problemId) {
+          const nextProblem = problems.find((problem) => problem.id === updates.problemId);
+          const message = updates.problemId
+            ? `Linked to problem ${updates.problemId}${nextProblem ? ` (${nextProblem.title})` : ''}.`
+            : 'Problem link removed.';
+          nextEntries.push({
+            id: `entry-${now}-problem`,
+            type: 'status',
+            author: currentUser || 'System',
+            time: formatEasternTime(now),
+            text: message,
+          });
+        }
+        if (Object.prototype.hasOwnProperty.call(updates, 'changeId') && updates.changeId !== item.changeId) {
+          const nextChange = changeEvents.find((change) => change.id === updates.changeId);
+          const message = updates.changeId
+            ? `Linked to change ${updates.changeId}${nextChange ? ` (${nextChange.title})` : ''}.`
+            : 'Change link removed.';
+          nextEntries.push({
+            id: `entry-${now}-change`,
+            type: 'status',
+            author: currentUser || 'System',
+            time: formatEasternTime(now),
+            text: message,
+          });
+        }
+        const next = { ...item, ...updates, entries: nextEntries };
         if (updates.status && item.status === 'New' && updates.status !== 'New' && !item.respondedAt) {
           next.respondedAt = Date.now();
         }
@@ -2012,9 +2678,17 @@ function AppIT() {
       }),
     );
     if (nextForRequest) {
-      updateTicket(id, nextForRequest).catch((error) => {
+      const { updatedTickets, changedTickets, logEntries } = applyAutomationRules([nextForRequest]);
+      const automatedTicket = updatedTickets[0] || nextForRequest;
+      if (changedTickets.size) {
+        setTickets((prev) => prev.map((item) => (item.id === id ? automatedTicket : item)));
+      }
+      updateTicket(id, automatedTicket).catch((error) => {
         console.error('Failed to update ticket', error);
       });
+      if (logEntries.length) {
+        setAutomationLog((prev) => [...logEntries, ...prev]);
+      }
     }
   };
 
@@ -2104,15 +2778,15 @@ function AppIT() {
     clearSession();
   };
 
-  const handleAddEntry = (ticketId, entry) => {
-    if (!ticketId || !entry) return;
+  const appendEntriesToTicket = (ticketId, entries) => {
+    if (!ticketId || !entries?.length) return null;
     let nextForRequest = null;
     setTickets((prev) =>
       prev.map((item) => {
         if (item.id !== ticketId) return item;
         const next = {
           ...item,
-          entries: [...(item.entries || []), entry],
+          entries: [...(item.entries || []), ...entries],
         };
         nextForRequest = next;
         return next;
@@ -2122,17 +2796,23 @@ function AppIT() {
       updateTicket(ticketId, nextForRequest).catch((error) => {
         console.error('Failed to append entry', error);
       });
-      if (entry.type === 'message') {
-        sendTicketMessage({
-          ticketId,
-          subject: nextForRequest.title,
-          message: entry.text,
-          requesterEmail: nextForRequest.requesterEmail,
-          requesterName: nextForRequest.requester,
-        }).catch((error) => {
-          console.error('Failed to send requester message', error);
-        });
-      }
+    }
+    return nextForRequest;
+  };
+
+  const handleAddEntry = (ticketId, entry) => {
+    if (!ticketId || !entry) return;
+    const nextForRequest = appendEntriesToTicket(ticketId, [entry]);
+    if (entry.type === 'message' && nextForRequest) {
+      sendTicketMessage({
+        ticketId,
+        subject: nextForRequest.title,
+        message: entry.text,
+        requesterEmail: nextForRequest.requesterEmail,
+        requesterName: nextForRequest.requester,
+      }).catch((error) => {
+        console.error('Failed to send requester message', error);
+      });
     }
   };
 
@@ -2172,47 +2852,162 @@ function AppIT() {
     });
   };
 
-  const handleRunAutomation = () => {
-    if (!automationRules.length) return;
-    let updatedTickets = [...tickets];
+  const buildAutomationEntry = (text) => ({
+    id: `entry-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    type: 'automation',
+    author: 'Automation',
+    time: formatEasternTime(Date.now()),
+    text,
+  });
+
+  const applyAutomationRules = (ticketsToProcess) => {
+    const now = Date.now();
     const changedTickets = new Map();
-    automationRules.forEach((rule) => {
-      if (!rule.enabled) return;
-      if (rule.condition === 'Priority is High') {
-        updatedTickets = updatedTickets.map((ticket) =>
-          ticket.priority === 'High'
-            ? (() => {
-                const next = { ...ticket, assignee: 'Erik Lofgren' };
-                changedTickets.set(ticket.id, next);
-                return next;
-              })()
-            : ticket,
-        );
+    const logEntries = [];
+
+    const updatedTickets = ticketsToProcess.map((ticket) => {
+      let next = { ...ticket };
+      let changed = false;
+      const entries = [...(ticket.entries || [])];
+      const automationState = { ...(ticket.automation || {}) };
+      const appliedRuleIds = Array.isArray(automationState.appliedRuleIds)
+        ? [...automationState.appliedRuleIds]
+        : [];
+      automationState.appliedRuleIds = appliedRuleIds;
+
+      const addEntry = (text) => {
+        entries.push(buildAutomationEntry(text));
+        logEntries.push({ id: `log-${Date.now()}-${Math.random()}`, text, when: new Date(now).toLocaleString() });
+        changed = true;
+      };
+
+      const markRule = (ruleId) => {
+        if (!appliedRuleIds.includes(ruleId)) {
+          appliedRuleIds.push(ruleId);
+          changed = true;
+        }
+      };
+
+      const slaPolicy = ticket.createdAt ? getSlaPolicy(ticket.priority) : null;
+      const responseSla =
+        ticket.createdAt && !ticket.respondedAt
+          ? buildSlaDisplay({
+              startAt: ticket.createdAt,
+              targetMs: slaPolicy.responseMs,
+              completedAt: ticket.respondedAt,
+              now,
+              warnMs: slaPolicy.responseWarnMs,
+            })
+          : null;
+      const resolveSla =
+        ticket.createdAt && !ticket.resolvedAt
+          ? buildSlaDisplay({
+              startAt: ticket.createdAt,
+              targetMs: slaPolicy.resolveMs,
+              completedAt: ticket.resolvedAt,
+              now,
+              warnMs: slaPolicy.resolveWarnMs,
+            })
+          : null;
+
+      automationRules.forEach((rule) => {
+        if (!rule.enabled) return;
+        const conditionMet =
+          (rule.condition === 'Priority is High' && ticket.priority === 'High') ||
+          (rule.condition === 'Status is Waiting on User' && ticket.status === 'Waiting on User');
+        const shouldApplyOnce =
+          rule.when === 'Ticket created' || rule.when === 'Status updated' || rule.when === 'SLA at risk';
+        if (shouldApplyOnce && appliedRuleIds.includes(rule.id)) return;
+
+        if (rule.when === 'SLA at risk') {
+          const slaAtRisk = responseSla?.state === 'at-risk' || resolveSla?.state === 'at-risk';
+          if (!slaAtRisk) return;
+          if (rule.condition && !conditionMet) return;
+        } else if (!conditionMet) {
+          return;
+        }
+
+        if (rule.action === 'Assign to on-call lead') {
+          if (next.assignee !== SLA_ON_CALL_LEAD) {
+            next = { ...next, assignee: SLA_ON_CALL_LEAD };
+            addEntry(`Automation: ${rule.name} assigned ticket to ${SLA_ON_CALL_LEAD}.`);
+          }
+        }
+        if (rule.action === 'Send reminder email') {
+          addEntry(`Automation: ${rule.name} sent a reminder to the assignee.`);
+        }
+
+        if (shouldApplyOnce) {
+          markRule(rule.id);
+        }
+      });
+
+      if (responseSla?.state === 'at-risk' && !automationState.slaResponseWarnedAt) {
+        automationState.slaResponseWarnedAt = now;
+        addEntry('Automation: Response SLA at risk. Reminder sent to the assignee.');
       }
-      if (rule.condition === 'Status is Waiting on User') {
-        updatedTickets = updatedTickets.map((ticket) =>
-          ticket.status === 'Waiting on User'
-            ? (() => {
-                const next = { ...ticket, status: 'In Review' };
-                changedTickets.set(ticket.id, next);
-                return next;
-              })()
-            : ticket,
-        );
+      if (resolveSla?.state === 'at-risk' && !automationState.slaResolveWarnedAt) {
+        automationState.slaResolveWarnedAt = now;
+        addEntry('Automation: Resolution SLA at risk. Reminder sent to the assignee.');
       }
+      if (responseSla?.state === 'breached' && !automationState.slaResponseBreachedAt) {
+        automationState.slaResponseBreachedAt = now;
+        if (next.assignee !== SLA_ESCALATION_OWNER) {
+          next = { ...next, assignee: SLA_ESCALATION_OWNER };
+        }
+        addEntry(`Automation: Response SLA breached. Escalated to ${SLA_ESCALATION_OWNER}.`);
+      }
+      if (resolveSla?.state === 'breached' && !automationState.slaResolveBreachedAt) {
+        automationState.slaResolveBreachedAt = now;
+        if (next.assignee !== SLA_ESCALATION_OWNER) {
+          next = { ...next, assignee: SLA_ESCALATION_OWNER };
+        }
+        addEntry(`Automation: Resolution SLA breached. Escalated to ${SLA_ESCALATION_OWNER}.`);
+      }
+
+      if (changed) {
+        next = { ...next, entries, automation: automationState };
+        changedTickets.set(next.id, next);
+        return next;
+      }
+      return ticket;
     });
+
+    return { updatedTickets, changedTickets, logEntries };
+  };
+
+  const handleRunAutomation = () => {
+    if (!tickets.length) return;
+    const { updatedTickets, changedTickets, logEntries } = applyAutomationRules(tickets);
+    if (!changedTickets.size) return;
     setTickets(updatedTickets);
     changedTickets.forEach((ticket) => {
       updateTicket(ticket.id, ticket).catch((error) => {
         console.error('Failed to apply automation update', error);
       });
     });
-    const timestamp = new Date().toLocaleString();
-    setAutomationLog((prev) => [
-      { id: `log-${Date.now()}`, text: `Automations applied at ${timestamp}.`, when: timestamp },
-      ...prev,
-    ]);
+    if (logEntries.length) {
+      setAutomationLog((prev) => [...logEntries, ...prev]);
+    }
   };
+
+  useEffect(() => {
+    if (!tickets.length) return undefined;
+    const interval = setInterval(() => {
+      const { updatedTickets, changedTickets, logEntries } = applyAutomationRules(tickets);
+      if (!changedTickets.size) return;
+      setTickets(updatedTickets);
+      changedTickets.forEach((ticket) => {
+        updateTicket(ticket.id, ticket).catch((error) => {
+          console.error('Failed to apply automation update', error);
+        });
+      });
+      if (logEntries.length) {
+        setAutomationLog((prev) => [...logEntries, ...prev]);
+      }
+    }, 120000);
+    return () => clearInterval(interval);
+  }, [automationRules, tickets]);
 
   const handleToggleCmdbItem = (itemId) => {
     setOpenCmdbId((prev) => (prev === itemId ? '' : itemId));
@@ -2334,6 +3129,7 @@ function AppIT() {
   const handleAddProblem = async () => {
     const title = problemDraft.title.trim();
     const impact = problemDraft.impact.trim();
+    const owner = problemDraft.owner.trim();
     const linkedValue = problemDraft.linked === '' ? 0 : Number(problemDraft.linked);
     if (!title || !impact) {
       setProblemError('Problem title and impact are required.');
@@ -2350,12 +3146,25 @@ function AppIT() {
       status: problemDraft.status,
       impact,
       linked: Math.round(linkedValue),
+      owner: owner || 'Unassigned',
+      rootCause: problemDraft.rootCause.trim(),
+      workaround: problemDraft.workaround.trim(),
+      fixPlan: problemDraft.fixPlan.trim(),
     };
     try {
       const response = await createProblem(newProblem);
       const saved = response.problem || newProblem;
       setProblems((prev) => [saved, ...prev]);
-      setProblemDraft({ title: '', status: 'Investigation', impact: '', linked: '' });
+      setProblemDraft({
+        title: '',
+        status: 'Investigation',
+        impact: '',
+        linked: '',
+        owner: '',
+        rootCause: '',
+        workaround: '',
+        fixPlan: '',
+      });
       setShowProblemForm(false);
     } catch (error) {
       console.error('Failed to create problem', error);
@@ -2395,6 +3204,80 @@ function AppIT() {
     setCatalogActiveId(id);
     setCatalogError('');
     setCatalogStep(0);
+    setDeflectionStats((prev) => ({ ...prev, views: prev.views + 1 }));
+  };
+
+  const handleOpenSuggestedArticle = (article) => {
+    if (!article) return;
+    setDeflectionStats((prev) => ({ ...prev, articleOpens: prev.articleOpens + 1 }));
+    setSelectedKnowledgeId(article.id);
+    setIsEditingKnowledge(false);
+    setKnowledgeDraft(null);
+    setActiveSection('knowledge-detail');
+  };
+
+  const handleDeflectRequest = () => {
+    setDeflectionStats((prev) => ({ ...prev, deflected: prev.deflected + 1 }));
+    setCatalogActiveId('');
+    setCatalogStep(0);
+  };
+
+  const handleExportReport = () => {
+    if (typeof document === 'undefined') return;
+    const now = Date.now();
+    const start = getRangeStart(reportRange, now);
+    const rows = tickets.filter((ticket) => ticket.createdAt && ticket.createdAt >= start);
+    const headers = [
+      'Ticket ID',
+      'Title',
+      'Requester',
+      'Assignee',
+      'Status',
+      'Category',
+      'Priority',
+      'Created At',
+      'Responded At',
+      'Resolved At',
+      'Response SLA Met',
+      'Resolution SLA Met',
+      'CSAT',
+    ];
+    const escapeCsv = (value) => {
+      const raw = value === null || value === undefined ? '' : String(value);
+      return `"${raw.replace(/\"/g, '""')}"`;
+    };
+    const lines = rows.map((ticket) => {
+      const policy = getSlaPolicy(ticket.priority);
+      const responseMet = ticket.respondedAt ? ticket.respondedAt <= ticket.createdAt + policy.responseMs : false;
+      const resolveMet = ticket.resolvedAt ? ticket.resolvedAt <= ticket.createdAt + policy.resolveMs : false;
+      return [
+        ticket.id,
+        ticket.title,
+        ticket.requester,
+        ticket.assignee,
+        ticket.status,
+        ticket.category,
+        ticket.priority,
+        formatEasternDateTime(ticket.createdAt),
+        formatEasternDateTime(ticket.respondedAt),
+        formatEasternDateTime(ticket.resolvedAt),
+        responseMet ? 'Yes' : 'No',
+        resolveMet ? 'Yes' : 'No',
+        ticket.csat || ticket.satisfactionScore || ticket.csatScore || '',
+      ]
+        .map(escapeCsv)
+        .join(',');
+    });
+    const csv = [headers.map(escapeCsv).join(','), ...lines].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ticket-report-${reportRange.replace(/\s+/g, '-').toLowerCase()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleCatalogStepChange = (nextStep) => {
@@ -2407,6 +3290,54 @@ function AppIT() {
     setCatalogActiveId('');
     setCatalogError('');
     setCatalogStep(0);
+  };
+
+  const applyHubRecord = (record, mapping) => {
+    if (!record) return;
+    setCatalogDraft((prev) => {
+      const next = { ...prev };
+      Object.entries(mapping).forEach(([draftKey, value]) => {
+        if (!next[draftKey] && value) {
+          next[draftKey] = value;
+        }
+      });
+      return next;
+    });
+  };
+
+  const buildHubName = (record) => buildEmployeeDisplayName(record);
+
+  const createApprovalsForTicket = async (ticket, requirements) => {
+    if (!requirements.length) return;
+    const now = Date.now();
+    const approvalsToCreate = requirements.map((requirement) => ({
+      id: createId('APR'),
+      type: requirement.type,
+      title: requirement.title,
+      requester: ticket.requester,
+      status: 'Pending',
+      due: requirement.due || 'Today',
+      approver: requirement.approver || 'IT Manager',
+      ticketId: ticket.id,
+      createdAt: now,
+    }));
+    setApprovals((prev) => [...approvalsToCreate, ...prev]);
+    setApprovalsMeta((prev) => ({ ...prev, total: prev.total + approvalsToCreate.length }));
+    await Promise.all(
+      approvalsToCreate.map((approval) =>
+        createApproval(approval).catch((error) => {
+          console.error('Failed to create approval', error);
+        }),
+      ),
+    );
+    const approvalEntries = approvalsToCreate.map((approval) => ({
+      id: `entry-${approval.id}`,
+      type: 'approval',
+      author: 'Workflow',
+      time: formatEasternTime(now),
+      text: `Approval requested: ${approval.title} (Approver: ${approval.approver}).`,
+    }));
+    appendEntriesToTicket(ticket.id, approvalEntries);
   };
 
   const handleAddCatalogItem = async () => {
@@ -2469,6 +3400,7 @@ function AppIT() {
   const handleCatalogSubmit = async (event) => {
     event.preventDefault();
     let ticketPayload = null;
+    let approvalRequirements = [];
     if (catalogActiveId === 'CAT-101') {
       const name = catalogDraft.employeeName.trim();
       const email = catalogDraft.employeeEmail.trim();
@@ -2487,8 +3419,14 @@ function AppIT() {
         catalogDraft.manager.trim() ? `Manager: ${catalogDraft.manager.trim()}` : null,
         catalogDraft.role.trim() ? `Role/Title: ${catalogDraft.role.trim()}` : null,
         catalogDraft.location.trim() ? `Location: ${catalogDraft.location.trim()}` : null,
-        catalogDraft.deviceNeeds.trim() ? `Device needs: ${catalogDraft.deviceNeeds.trim()}` : null,
-        catalogDraft.accessNeeds.trim() ? `Access needs: ${catalogDraft.accessNeeds.trim()}` : null,
+        catalogDraft.onboardingNeedsHardware && catalogDraft.deviceNeeds.trim()
+          ? `Device needs: ${catalogDraft.deviceNeeds.trim()}`
+          : null,
+        !catalogDraft.onboardingNeedsHardware ? 'Device needs: None' : null,
+        catalogDraft.onboardingNeedsAccess && catalogDraft.accessNeeds.trim()
+          ? `Access needs: ${catalogDraft.accessNeeds.trim()}`
+          : null,
+        !catalogDraft.onboardingNeedsAccess ? 'Access needs: None' : null,
         catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
       ].filter(Boolean);
       ticketPayload = {
@@ -2508,6 +3446,7 @@ function AppIT() {
         description: descriptionLines.join('\n'),
         entries: [],
       };
+      approvalRequirements = getApprovalRequirements(catalogActiveId, catalogDraft, onboardingMatch);
     } else if (catalogActiveId === 'CAT-203') {
       const name = catalogDraft.vpnUser.trim();
       const email = catalogDraft.vpnEmail.trim();
@@ -2521,8 +3460,9 @@ function AppIT() {
         `Requester: ${name}`,
         `Email: ${email}`,
         `Reason: ${reason}`,
-        catalogDraft.vpnStartDate.trim() ? `Start date: ${catalogDraft.vpnStartDate.trim()}` : null,
-        catalogDraft.vpnEndDate.trim() ? `End date: ${catalogDraft.vpnEndDate.trim()}` : null,
+        catalogDraft.vpnTemporaryAccess ? 'Access duration: Temporary' : 'Access duration: Ongoing',
+        catalogDraft.vpnTemporaryAccess && catalogDraft.vpnStartDate.trim() ? `Start date: ${catalogDraft.vpnStartDate.trim()}` : null,
+        catalogDraft.vpnTemporaryAccess && catalogDraft.vpnEndDate.trim() ? `End date: ${catalogDraft.vpnEndDate.trim()}` : null,
         catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
       ].filter(Boolean);
       ticketPayload = {
@@ -2541,6 +3481,7 @@ function AppIT() {
         description: descriptionLines.join('\n'),
         entries: [],
       };
+      approvalRequirements = getApprovalRequirements(catalogActiveId, catalogDraft, vpnMatch);
     } else if (catalogActiveId === 'CAT-312') {
       const name = catalogDraft.laptopUser.trim();
       const email = catalogDraft.laptopEmail.trim();
@@ -2555,6 +3496,7 @@ function AppIT() {
         `Email: ${email}`,
         `Issue: ${issue}`,
         catalogDraft.laptopAssetTag.trim() ? `Asset tag: ${catalogDraft.laptopAssetTag.trim()}` : null,
+        catalogDraft.laptopNeedsLoaner ? `Loaner device: Yes (${catalogDraft.laptopLoanerDuration || 'Duration TBD'})` : 'Loaner device: No',
         catalogDraft.laptopNeededBy.trim() ? `Needed by: ${catalogDraft.laptopNeededBy.trim()}` : null,
         catalogDraft.department.trim() ? `Department: ${catalogDraft.department.trim()}` : null,
         catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
@@ -2576,6 +3518,7 @@ function AppIT() {
         description: descriptionLines.join('\n'),
         entries: [],
       };
+      approvalRequirements = getApprovalRequirements(catalogActiveId, catalogDraft, laptopMatch);
     } else if (catalogActiveId === 'CAT-404') {
       const name = catalogDraft.softwareUser.trim();
       const email = catalogDraft.softwareEmail.trim();
@@ -2591,6 +3534,7 @@ function AppIT() {
         `Software: ${software}`,
         catalogDraft.softwareJustification.trim() ? `Justification: ${catalogDraft.softwareJustification.trim()}` : null,
         catalogDraft.softwareCostCenter.trim() ? `Cost center: ${catalogDraft.softwareCostCenter.trim()}` : null,
+        catalogDraft.softwareRequiresAdmin ? `Admin install required: ${catalogDraft.softwareAdminNeed || 'Yes'}` : 'Admin install required: No',
         catalogDraft.department.trim() ? `Department: ${catalogDraft.department.trim()}` : null,
         catalogDraft.notes.trim() ? `Notes: ${catalogDraft.notes.trim()}` : null,
       ].filter(Boolean);
@@ -2610,6 +3554,7 @@ function AppIT() {
         description: descriptionLines.join('\n'),
         entries: [],
       };
+      approvalRequirements = getApprovalRequirements(catalogActiveId, catalogDraft, softwareMatch);
     } else {
       return;
     }
@@ -2618,10 +3563,24 @@ function AppIT() {
     try {
       const response = await createTicket(ticketPayload);
       const createdTicket = response.ticket || ticketPayload;
-      setTickets((prev) => [createdTicket, ...prev]);
+      setDeflectionStats((prev) => ({ ...prev, submitted: prev.submitted + 1 }));
+      const { updatedTickets, changedTickets, logEntries } = applyAutomationRules([createdTicket]);
+      const automatedTicket = updatedTickets[0] || createdTicket;
+      setTickets((prev) => [automatedTicket, ...prev]);
+      if (changedTickets.size) {
+        updateTicket(automatedTicket.id, automatedTicket).catch((error) => {
+          console.error('Failed to apply automation update', error);
+        });
+        if (logEntries.length) {
+          setAutomationLog((prev) => [...logEntries, ...prev]);
+        }
+      }
       setTicketsMeta((prev) => ({ ...prev, total: prev.total + 1 }));
-      setSelectedTicketId(createdTicket.id);
+      setSelectedTicketId(automatedTicket.id);
       setActiveSection('ticket-detail');
+      if (approvalRequirements.length) {
+        await createApprovalsForTicket(automatedTicket, approvalRequirements);
+      }
       setCatalogDraft({
         employeeName: '',
         employeeEmail: '',
@@ -2630,24 +3589,31 @@ function AppIT() {
         manager: '',
         role: '',
         location: '',
+        onboardingNeedsHardware: true,
+        onboardingNeedsAccess: true,
         deviceNeeds: '',
         accessNeeds: '',
         notes: '',
         vpnUser: '',
         vpnEmail: '',
         vpnReason: '',
+        vpnTemporaryAccess: false,
         vpnStartDate: '',
         vpnEndDate: '',
         laptopUser: '',
         laptopEmail: '',
         laptopIssue: '',
         laptopAssetTag: '',
+        laptopNeedsLoaner: false,
+        laptopLoanerDuration: '',
         laptopNeededBy: '',
         softwareUser: '',
         softwareEmail: '',
         softwareTitle: '',
         softwareJustification: '',
         softwareCostCenter: '',
+        softwareRequiresAdmin: false,
+        softwareAdminNeed: '',
       });
       setCatalogStep(0);
       setCatalogActiveId('');
@@ -3339,20 +4305,22 @@ function AppIT() {
             )}
 
             {activeSection === 'ticket-detail' && (
-              <TicketDetail
-                activeTicket={activeTicket}
-                currentUser={currentUser}
-                assignees={ASSIGNEES}
-                statusOptions={STATUS_OPTIONS}
-                intakeEmail={INTAKE_EMAIL}
-                intakeSource={INTAKE_SOURCE}
-                requesterRecord={requesterRecord}
-                requesterAssets={requesterAssets}
-                cannedResponses={cannedResponses}
-                selectedCannedId={selectedCannedId}
-                onSelectCannedId={setSelectedCannedId}
-                pendingCannedBody={pendingCannedBody}
-                onConsumeCannedBody={() => setPendingCannedBody('')}
+                <TicketDetail
+                  activeTicket={activeTicket}
+                  currentUser={currentUser}
+                  assignees={ASSIGNEES}
+                  statusOptions={STATUS_OPTIONS}
+                  intakeEmail={INTAKE_EMAIL}
+                  intakeSource={INTAKE_SOURCE}
+                  requesterRecord={requesterRecord}
+                  requesterAssets={requesterAssets}
+                  problems={problems}
+                  changeEvents={changeEvents}
+                  cannedResponses={cannedResponses}
+                  selectedCannedId={selectedCannedId}
+                  onSelectCannedId={setSelectedCannedId}
+                  pendingCannedBody={pendingCannedBody}
+                  onConsumeCannedBody={() => setPendingCannedBody('')}
                 onBack={() => handleNavigate('tickets')}
                 onTicketUpdate={handleTicketUpdate}
                 onAddEntry={handleAddEntry}
@@ -3474,6 +4442,18 @@ function AppIT() {
                   <button className="btn btn-ghost btn-small" type="button" onClick={() => setShowCatalogForm(true)}>
                     Add request
                   </button>
+                </div>
+                <div className="catalog-metrics">
+                  <div className="detail-card">
+                    <div className="detail-label">Deflection analytics</div>
+                    <div className="list-inline">
+                      <InlineTag>{deflectionStats.views} request views</InlineTag>
+                      <InlineTag>{deflectionStats.articleOpens} KB opens</InlineTag>
+                      <InlineTag>{deflectionStats.deflected} resolved without ticket</InlineTag>
+                      <InlineTag>{deflectionStats.submitted} submitted</InlineTag>
+                    </div>
+                    <p className="work-meta">Track how many requests are resolved by self-service.</p>
+                  </div>
                 </div>
                 <div className="module-grid">
                   {catalogItems.map((item) => (
@@ -3613,6 +4593,24 @@ function AppIT() {
                                   placeholder="e.g. HCBS"
                                 />
                               </label>
+                              <HubMatchCard
+                                record={onboardingMatch}
+                                onApply={() =>
+                                  applyHubRecord(onboardingMatch, {
+                                    employeeName: buildHubName(onboardingMatch),
+                                    employeeEmail: onboardingMatch?.email,
+                                    department: onboardingMatch?.department,
+                                    manager: onboardingMatch?.supervisor,
+                                    role: onboardingMatch?.jobTitle,
+                                    location: onboardingMatch?.location,
+                                  })
+                                }
+                              />
+                              <SuggestedArticles
+                                articles={catalogSuggestedArticles}
+                                onOpen={handleOpenSuggestedArticle}
+                                onDeflect={handleDeflectRequest}
+                              />
                             </>
                           )}
                           {catalogStep === 1 && (
@@ -3649,23 +4647,59 @@ function AppIT() {
                           {catalogStep === 2 && (
                             <>
                               <label className="label">
-                                Device needs
-                                <input
-                                  className="input"
-                                  value={catalogDraft.deviceNeeds}
-                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, deviceNeeds: event.target.value }))}
-                                  placeholder="e.g. Laptop + docking station"
-                                />
+                                Provision hardware?
+                                <select
+                                  className="control-select"
+                                  value={catalogDraft.onboardingNeedsHardware ? 'Yes' : 'No'}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({
+                                      ...prev,
+                                      onboardingNeedsHardware: event.target.value === 'Yes',
+                                    }))
+                                  }
+                                >
+                                  <option>Yes</option>
+                                  <option>No</option>
+                                </select>
                               </label>
+                              {catalogDraft.onboardingNeedsHardware && (
+                                <label className="label">
+                                  Device needs
+                                  <input
+                                    className="input"
+                                    value={catalogDraft.deviceNeeds}
+                                    onChange={(event) => setCatalogDraft((prev) => ({ ...prev, deviceNeeds: event.target.value }))}
+                                    placeholder="e.g. Laptop + docking station"
+                                  />
+                                </label>
+                              )}
                               <label className="label">
-                                Access needs
-                                <input
-                                  className="input"
-                                  value={catalogDraft.accessNeeds}
-                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, accessNeeds: event.target.value }))}
-                                  placeholder="e.g. Teams, Salesforce"
-                                />
+                                Provision access?
+                                <select
+                                  className="control-select"
+                                  value={catalogDraft.onboardingNeedsAccess ? 'Yes' : 'No'}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({
+                                      ...prev,
+                                      onboardingNeedsAccess: event.target.value === 'Yes',
+                                    }))
+                                  }
+                                >
+                                  <option>Yes</option>
+                                  <option>No</option>
+                                </select>
                               </label>
+                              {catalogDraft.onboardingNeedsAccess && (
+                                <label className="label">
+                                  Access needs
+                                  <input
+                                    className="input"
+                                    value={catalogDraft.accessNeeds}
+                                    onChange={(event) => setCatalogDraft((prev) => ({ ...prev, accessNeeds: event.target.value }))}
+                                    placeholder="e.g. Teams, Salesforce"
+                                  />
+                                </label>
+                              )}
                               <label className="label">
                                 Notes
                                 <textarea
@@ -3703,14 +4737,28 @@ function AppIT() {
                                   <strong>Location:</strong> {catalogDraft.location || 'Not provided'}
                                 </div>
                                 <div className="wizard-review-item">
-                                  <strong>Device needs:</strong> {catalogDraft.deviceNeeds || 'Not provided'}
+                                  <strong>Hardware:</strong>{' '}
+                                  {catalogDraft.onboardingNeedsHardware
+                                    ? catalogDraft.deviceNeeds || 'Requested'
+                                    : 'No hardware needed'}
                                 </div>
                                 <div className="wizard-review-item">
-                                  <strong>Access needs:</strong> {catalogDraft.accessNeeds || 'Not provided'}
+                                  <strong>Access:</strong>{' '}
+                                  {catalogDraft.onboardingNeedsAccess
+                                    ? catalogDraft.accessNeeds || 'Requested'
+                                    : 'No access needed'}
                                 </div>
                                 <div className="wizard-review-item">
                                   <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
                                 </div>
+                                {getApprovalRequirements(catalogActiveId, catalogDraft, onboardingMatch).length > 0 && (
+                                  <div className="wizard-review-item">
+                                    <strong>Approvals:</strong>{' '}
+                                    {getApprovalRequirements(catalogActiveId, catalogDraft, onboardingMatch)
+                                      .map((item) => `${item.type} (${item.approver})`)
+                                      .join(', ')}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -3762,7 +4810,10 @@ function AppIT() {
                       catalogStep === 0
                         ? Boolean(catalogDraft.vpnUser.trim() && catalogDraft.vpnEmail.trim())
                         : catalogStep === 1
-                          ? Boolean(catalogDraft.vpnReason.trim())
+                          ? Boolean(
+                              catalogDraft.vpnReason.trim() &&
+                                (!catalogDraft.vpnTemporaryAccess || catalogDraft.vpnEndDate.trim()),
+                            )
                           : true;
 
                     return (
@@ -3808,6 +4859,21 @@ function AppIT() {
                                   placeholder="e.g. HCBS"
                                 />
                               </label>
+                              <HubMatchCard
+                                record={vpnMatch}
+                                onApply={() =>
+                                  applyHubRecord(vpnMatch, {
+                                    vpnUser: buildHubName(vpnMatch),
+                                    vpnEmail: vpnMatch?.email,
+                                    department: vpnMatch?.department,
+                                  })
+                                }
+                              />
+                              <SuggestedArticles
+                                articles={catalogSuggestedArticles}
+                                onOpen={handleOpenSuggestedArticle}
+                                onDeflect={handleDeflectRequest}
+                              />
                             </>
                           )}
                           {catalogStep === 1 && (
@@ -3822,23 +4888,43 @@ function AppIT() {
                                 />
                               </label>
                               <label className="label">
-                                Start date
-                                <input
-                                  className="input"
-                                  value={catalogDraft.vpnStartDate}
-                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnStartDate: event.target.value }))}
-                                  placeholder="e.g. 2026-02-01"
-                                />
+                                Temporary access?
+                                <select
+                                  className="control-select"
+                                  value={catalogDraft.vpnTemporaryAccess ? 'Yes' : 'No'}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({
+                                      ...prev,
+                                      vpnTemporaryAccess: event.target.value === 'Yes',
+                                    }))
+                                  }
+                                >
+                                  <option>No</option>
+                                  <option>Yes</option>
+                                </select>
                               </label>
-                              <label className="label">
-                                End date
-                                <input
-                                  className="input"
-                                  value={catalogDraft.vpnEndDate}
-                                  onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEndDate: event.target.value }))}
-                                  placeholder="Leave blank if ongoing"
-                                />
-                              </label>
+                              {catalogDraft.vpnTemporaryAccess && (
+                                <>
+                                  <label className="label">
+                                    Start date (optional)
+                                    <input
+                                      className="input"
+                                      value={catalogDraft.vpnStartDate}
+                                      onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnStartDate: event.target.value }))}
+                                      placeholder="e.g. 2026-02-01"
+                                    />
+                                  </label>
+                                  <label className="label">
+                                    End date
+                                    <input
+                                      className="input"
+                                      value={catalogDraft.vpnEndDate}
+                                      onChange={(event) => setCatalogDraft((prev) => ({ ...prev, vpnEndDate: event.target.value }))}
+                                      placeholder="Leave blank if ongoing"
+                                    />
+                                  </label>
+                                </>
+                              )}
                               <label className="label">
                                 Notes
                                 <textarea
@@ -3867,14 +4953,30 @@ function AppIT() {
                                   <strong>Reason:</strong> {catalogDraft.vpnReason || 'Not provided'}
                                 </div>
                                 <div className="wizard-review-item">
-                                  <strong>Start date:</strong> {catalogDraft.vpnStartDate || 'Not provided'}
+                                  <strong>Access duration:</strong>{' '}
+                                  {catalogDraft.vpnTemporaryAccess ? 'Temporary' : 'Ongoing'}
                                 </div>
-                                <div className="wizard-review-item">
-                                  <strong>End date:</strong> {catalogDraft.vpnEndDate || 'Not provided'}
-                                </div>
+                                {catalogDraft.vpnTemporaryAccess && (
+                                  <>
+                                    <div className="wizard-review-item">
+                                      <strong>Start date:</strong> {catalogDraft.vpnStartDate || 'Not provided'}
+                                    </div>
+                                    <div className="wizard-review-item">
+                                      <strong>End date:</strong> {catalogDraft.vpnEndDate || 'Not provided'}
+                                    </div>
+                                  </>
+                                )}
                                 <div className="wizard-review-item">
                                   <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
                                 </div>
+                                {getApprovalRequirements(catalogActiveId, catalogDraft, vpnMatch).length > 0 && (
+                                  <div className="wizard-review-item">
+                                    <strong>Approvals:</strong>{' '}
+                                    {getApprovalRequirements(catalogActiveId, catalogDraft, vpnMatch)
+                                      .map((item) => `${item.type} (${item.approver})`)
+                                      .join(', ')}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -3926,7 +5028,10 @@ function AppIT() {
                       catalogStep === 0
                         ? Boolean(catalogDraft.laptopUser.trim() && catalogDraft.laptopEmail.trim())
                         : catalogStep === 1
-                          ? Boolean(catalogDraft.laptopIssue.trim())
+                          ? Boolean(
+                              catalogDraft.laptopIssue.trim() &&
+                                (!catalogDraft.laptopNeedsLoaner || catalogDraft.laptopLoanerDuration.trim()),
+                            )
                           : true;
 
                     return (
@@ -3972,6 +5077,22 @@ function AppIT() {
                                   placeholder="e.g. HCBS"
                                 />
                               </label>
+                              <HubMatchCard
+                                record={laptopMatch}
+                                onApply={() =>
+                                  applyHubRecord(laptopMatch, {
+                                    laptopUser: buildHubName(laptopMatch),
+                                    laptopEmail: laptopMatch?.email,
+                                    department: laptopMatch?.department,
+                                    laptopAssetTag: laptopMatch?.computer,
+                                  })
+                                }
+                              />
+                              <SuggestedArticles
+                                articles={catalogSuggestedArticles}
+                                onOpen={handleOpenSuggestedArticle}
+                                onDeflect={handleDeflectRequest}
+                              />
                             </>
                           )}
                           {catalogStep === 1 && (
@@ -3994,6 +5115,33 @@ function AppIT() {
                                   placeholder="e.g. LAPTOP418"
                                 />
                               </label>
+                              <label className="label">
+                                Loaner device needed?
+                                <select
+                                  className="control-select"
+                                  value={catalogDraft.laptopNeedsLoaner ? 'Yes' : 'No'}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({
+                                      ...prev,
+                                      laptopNeedsLoaner: event.target.value === 'Yes',
+                                    }))
+                                  }
+                                >
+                                  <option>No</option>
+                                  <option>Yes</option>
+                                </select>
+                              </label>
+                              {catalogDraft.laptopNeedsLoaner && (
+                                <label className="label">
+                                  Loaner duration
+                                  <input
+                                    className="input"
+                                    value={catalogDraft.laptopLoanerDuration}
+                                    onChange={(event) => setCatalogDraft((prev) => ({ ...prev, laptopLoanerDuration: event.target.value }))}
+                                    placeholder="e.g. 2 weeks"
+                                  />
+                                </label>
+                              )}
                               <label className="label">
                                 Needed by (optional)
                                 <input
@@ -4034,11 +5182,25 @@ function AppIT() {
                                   <strong>Asset tag:</strong> {catalogDraft.laptopAssetTag || 'Not provided'}
                                 </div>
                                 <div className="wizard-review-item">
+                                  <strong>Loaner device:</strong>{' '}
+                                  {catalogDraft.laptopNeedsLoaner
+                                    ? catalogDraft.laptopLoanerDuration || 'Requested'
+                                    : 'No'}
+                                </div>
+                                <div className="wizard-review-item">
                                   <strong>Needed by:</strong> {catalogDraft.laptopNeededBy || 'Not provided'}
                                 </div>
                                 <div className="wizard-review-item">
                                   <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
                                 </div>
+                                {getApprovalRequirements(catalogActiveId, catalogDraft, laptopMatch).length > 0 && (
+                                  <div className="wizard-review-item">
+                                    <strong>Approvals:</strong>{' '}
+                                    {getApprovalRequirements(catalogActiveId, catalogDraft, laptopMatch)
+                                      .map((item) => `${item.type} (${item.approver})`)
+                                      .join(', ')}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -4090,7 +5252,10 @@ function AppIT() {
                       catalogStep === 0
                         ? Boolean(catalogDraft.softwareUser.trim() && catalogDraft.softwareEmail.trim())
                         : catalogStep === 1
-                          ? Boolean(catalogDraft.softwareTitle.trim())
+                          ? Boolean(
+                              catalogDraft.softwareTitle.trim() &&
+                                (!catalogDraft.softwareRequiresAdmin || catalogDraft.softwareAdminNeed.trim()),
+                            )
                           : true;
 
                     return (
@@ -4136,6 +5301,21 @@ function AppIT() {
                                   placeholder="e.g. Resource Center"
                                 />
                               </label>
+                              <HubMatchCard
+                                record={softwareMatch}
+                                onApply={() =>
+                                  applyHubRecord(softwareMatch, {
+                                    softwareUser: buildHubName(softwareMatch),
+                                    softwareEmail: softwareMatch?.email,
+                                    department: softwareMatch?.department,
+                                  })
+                                }
+                              />
+                              <SuggestedArticles
+                                articles={catalogSuggestedArticles}
+                                onOpen={handleOpenSuggestedArticle}
+                                onDeflect={handleDeflectRequest}
+                              />
                             </>
                           )}
                           {catalogStep === 1 && (
@@ -4170,6 +5350,33 @@ function AppIT() {
                                 />
                               </label>
                               <label className="label">
+                                Admin install required?
+                                <select
+                                  className="control-select"
+                                  value={catalogDraft.softwareRequiresAdmin ? 'Yes' : 'No'}
+                                  onChange={(event) =>
+                                    setCatalogDraft((prev) => ({
+                                      ...prev,
+                                      softwareRequiresAdmin: event.target.value === 'Yes',
+                                    }))
+                                  }
+                                >
+                                  <option>No</option>
+                                  <option>Yes</option>
+                                </select>
+                              </label>
+                              {catalogDraft.softwareRequiresAdmin && (
+                                <label className="label">
+                                  Admin install justification
+                                  <textarea
+                                    className="textarea"
+                                    value={catalogDraft.softwareAdminNeed}
+                                    onChange={(event) => setCatalogDraft((prev) => ({ ...prev, softwareAdminNeed: event.target.value }))}
+                                    placeholder="Describe the admin-level need."
+                                  />
+                                </label>
+                              )}
+                              <label className="label">
                                 Notes
                                 <textarea
                                   className="textarea"
@@ -4203,8 +5410,22 @@ function AppIT() {
                                   <strong>Cost center:</strong> {catalogDraft.softwareCostCenter || 'Not provided'}
                                 </div>
                                 <div className="wizard-review-item">
+                                  <strong>Admin install:</strong>{' '}
+                                  {catalogDraft.softwareRequiresAdmin
+                                    ? catalogDraft.softwareAdminNeed || 'Requested'
+                                    : 'No'}
+                                </div>
+                                <div className="wizard-review-item">
                                   <strong>Notes:</strong> {catalogDraft.notes || 'Not provided'}
                                 </div>
+                                {getApprovalRequirements(catalogActiveId, catalogDraft, softwareMatch).length > 0 && (
+                                  <div className="wizard-review-item">
+                                    <strong>Approvals:</strong>{' '}
+                                    {getApprovalRequirements(catalogActiveId, catalogDraft, softwareMatch)
+                                      .map((item) => `${item.type} (${item.approver})`)
+                                      .join(', ')}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
@@ -4519,8 +5740,10 @@ function AppIT() {
                         </div>
                         <p className="work-title">{problem.title}</p>
                         <p className="work-meta">
-                          Impact: {problem.impact} - Linked incidents: {problem.linked}
+                          Impact: {problem.impact} · Owner: {problem.owner || 'Unassigned'} · Linked incidents: {problem.linked}
                         </p>
+                        {problem.rootCause && <p className="work-meta">Root cause: {problem.rootCause}</p>}
+                        {problem.workaround && <p className="work-meta">Workaround: {problem.workaround}</p>}
                       </div>
                       <button className="btn btn-ghost btn-small" type="button">
                         Review
@@ -4556,6 +5779,15 @@ function AppIT() {
                         />
                       </label>
                       <label className="label">
+                        Owner
+                        <input
+                          className="input"
+                          value={problemDraft.owner}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, owner: event.target.value }))}
+                          placeholder="e.g. Geoffrey Heller"
+                        />
+                      </label>
+                      <label className="label">
                         Status
                         <select
                           className="control-select"
@@ -4576,6 +5808,33 @@ function AppIT() {
                           value={problemDraft.linked}
                           onChange={(event) => setProblemDraft((prev) => ({ ...prev, linked: event.target.value }))}
                           placeholder="e.g. 3"
+                        />
+                      </label>
+                      <label className="label">
+                        Root cause
+                        <textarea
+                          className="textarea"
+                          value={problemDraft.rootCause}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, rootCause: event.target.value }))}
+                          placeholder="Describe the underlying root cause."
+                        />
+                      </label>
+                      <label className="label">
+                        Workaround
+                        <textarea
+                          className="textarea"
+                          value={problemDraft.workaround}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, workaround: event.target.value }))}
+                          placeholder="Current mitigation or workaround."
+                        />
+                      </label>
+                      <label className="label">
+                        Fix plan
+                        <textarea
+                          className="textarea"
+                          value={problemDraft.fixPlan}
+                          onChange={(event) => setProblemDraft((prev) => ({ ...prev, fixPlan: event.target.value }))}
+                          placeholder="Planned permanent fix."
                         />
                       </label>
                       <div className="list-inline">
@@ -4616,7 +5875,7 @@ function AppIT() {
                       </select>
                     </label>
                     <div className="report-export">
-                      <button className="btn btn-ghost btn-small" type="button">
+                      <button className="btn btn-ghost btn-small" type="button" onClick={handleExportReport}>
                         Export CSV
                       </button>
                       <button className="btn btn-primary btn-small" type="button">
@@ -4678,12 +5937,44 @@ function AppIT() {
                 </div>
 
                 <div className="reports-grid">
+                  <ReportBarList
+                    title="SLA compliance by category"
+                    items={reportData.slaByCategory}
+                    hint="Resolution SLA by category."
+                    icon={ShieldCheck}
+                  />
+                  <ReportBarList
+                    title="SLA compliance by queue"
+                    items={reportData.slaByQueue}
+                    hint="Resolution SLA by assignee."
+                    icon={Users}
+                  />
+                </div>
+
+                <div className="reports-grid">
                   <TrendBars title="CSAT trend" items={reportData.csatTrend} hint="Average score over time." icon={TrendingUp} />
                   <ReportBarList
                     title="Change success rate"
                     items={reportData.changeSuccess}
                     hint="Outcome rate for scheduled changes."
                     icon={CheckCircle2}
+                  />
+                </div>
+
+                <div className="reports-grid">
+                  <ReportBarList
+                    title="CSAT by category"
+                    items={reportData.csatByCategory}
+                    hint="Average CSAT per category."
+                    icon={TrendingUp}
+                    valueSuffix="/5"
+                  />
+                  <ReportBarList
+                    title="CSAT by assignee"
+                    items={reportData.csatByQueue}
+                    hint="Average CSAT per assignee."
+                    icon={Users}
+                    valueSuffix="/5"
                   />
                 </div>
 
@@ -4743,6 +6034,36 @@ function AppIT() {
                           <span className="report-list-value">{item.count}</span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="report-card">
+                    <div className="report-card-header">
+                      <div>
+                        <h3>Self-service deflection</h3>
+                        <p>Catalog views vs deflected requests.</p>
+                      </div>
+                      <span className="report-card-icon">
+                        <CheckCircle2 size={16} />
+                      </span>
+                    </div>
+                    <div className="report-list">
+                      <div className="report-list-row">
+                        <span>Request views</span>
+                        <span className="report-list-value">{deflectionStats.views}</span>
+                      </div>
+                      <div className="report-list-row">
+                        <span>KB opens</span>
+                        <span className="report-list-value">{deflectionStats.articleOpens}</span>
+                      </div>
+                      <div className="report-list-row">
+                        <span>Resolved without ticket</span>
+                        <span className="report-list-value">{deflectionStats.deflected}</span>
+                      </div>
+                      <div className="report-list-row">
+                        <span>Requests submitted</span>
+                        <span className="report-list-value">{deflectionStats.submitted}</span>
+                      </div>
                     </div>
                   </div>
                 </div>

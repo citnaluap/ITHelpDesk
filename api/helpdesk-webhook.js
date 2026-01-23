@@ -133,6 +133,44 @@ const parseFromField = (value) => {
   return { name: value.trim(), email: '' };
 };
 
+const normalizeAttachments = (attachments) => {
+  if (!Array.isArray(attachments)) return [];
+  return attachments
+    .map((attachment, index) => {
+      if (!attachment) return null;
+      if (typeof attachment === 'string') {
+        const name = attachment.split('?')[0].split('#')[0].split('/').pop() || `Attachment ${index + 1}`;
+        return { id: `att-${index + 1}`, name, url: attachment };
+      }
+      const url =
+        attachment.url ||
+        attachment.downloadUrl ||
+        attachment.contentUrl ||
+        attachment.href ||
+        attachment.link ||
+        attachment.previewUrl ||
+        '';
+      const name =
+        attachment.name ||
+        attachment.filename ||
+        attachment.fileName ||
+        attachment.title ||
+        (url ? url.split('?')[0].split('#')[0].split('/').pop() : '') ||
+        `Attachment ${index + 1}`;
+      const rawSize = attachment.size ?? attachment.bytes ?? attachment.sizeBytes ?? attachment.length;
+      const parsedSize = Number.isFinite(rawSize) ? rawSize : Number.parseInt(rawSize, 10);
+      return {
+        id: attachment.id || attachment.attachmentId || `att-${index + 1}`,
+        name,
+        url,
+        type: attachment.type || attachment.mimeType || attachment.contentType || attachment.mediaType || '',
+        size: Number.isFinite(parsedSize) ? parsedSize : null,
+      };
+    })
+    .filter(Boolean)
+    .filter((attachment) => attachment.url || attachment.name);
+};
+
 const mapPayloadToTicket = (payload) => {
   const ticket = payload?.ticket || payload?.data || payload || {};
   const bodyContent =
@@ -185,6 +223,14 @@ const mapPayloadToTicket = (payload) => {
     (typeof from === 'string' && from.includes('@') ? from : '') ||
     parsedFrom.email ||
     '';
+  const attachments = normalizeAttachments(
+    ticket.attachments ||
+      payload?.attachments ||
+      payload?.data?.attachments ||
+      payload?.message?.attachments ||
+      payload?.files ||
+      [],
+  );
 
   return {
     id: rawId ? String(rawId) : `WEB-${Date.now()}`,
@@ -239,6 +285,7 @@ const mapPayloadToTicket = (payload) => {
       payload?.rawText ||
       bodyContent ||
       '',
+    attachments,
     entries: Array.isArray(ticket.entries)
       ? ticket.entries.map((entry, index) => ({
           id: entry.id || `entry-${Date.now()}-${index}`,

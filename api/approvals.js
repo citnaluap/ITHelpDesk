@@ -92,6 +92,20 @@ export default async function handler(req, res) {
       });
     }
 
+    if (req.method === 'POST') {
+      const body = parseBody(req);
+      const approval = body?.approval || body;
+      if (!approval?.id) {
+        return res.status(400).json({ error: 'Missing approval payload' });
+      }
+      await db`
+        INSERT INTO approvals (id, data)
+        VALUES (${approval.id}, ${JSON.stringify(approval)}::jsonb)
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data;
+      `;
+      return res.status(200).json({ approval });
+    }
+
     if (req.method === 'PATCH') {
       const body = parseBody(req);
       const id = body?.id;
